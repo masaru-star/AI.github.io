@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ubuntu Web OS (VFS Prototype)</title>
+  <!-- Tailwind CSS & Lucide Icons (Web-safe fallbacks included) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.341.0/font/lucide.min.css" rel="stylesheet">
+  <style>
+    /* Ubuntu Font & UI tweaks */
+    @import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+    body {
+      font-family: 'Ubuntu', sans-serif;
+      user-select: none;
+      overflow: hidden;
+    }
+    .window-active {
+      z-index: 50;
+    }
+    .window-inactive {
+      z-index: 30;
+    }
+    /* Custom scrollbar for Ubuntu look */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #4a4a4a;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #77216F;
+    }
+    /* Terminal styling */
+    .terminal-body {
+      font-family: 'Courier New', Courier, monospace;
+    }
+  </style>
+</head>
+<body class="w-screen h-screen bg-[#2c001e] text-white overflow-hidden relative" id="desktop-root">
+
+  <!-- ==================== 1. BOOT / DISK MANAGER OVERLAY ==================== -->
+  <div id="boot-screen" class="absolute inset-0 bg-[#2c001e] flex flex-col items-center justify-center z-[100] transition-opacity duration-500">
+    <div class="text-center max-w-md w-full px-6">
+      <!-- Ubuntu Logo style SVG -->
+      <div class="flex justify-center mb-8">
+        <svg class="w-24 h-24 text-[#e95420]" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 4c1.105 0 2 .895 2 2s-.895 2-2 2-2-.895-2-2 .895-2 2-2zm-6.5 5.5c.828 0 1.5.672 1.5 1.5s-.672 1.5-1.5 1.5-1.5-.672-1.5-1.5.672-1.5 1.5-1.5zm13 0c.828 0 1.5.672 1.5 1.5s-.672 1.5-1.5 1.5-1.5-.672-1.5-1.5.672-1.5 1.5-1.5zM12 14c-1.105 0-2 .895-2 2s.895 2 2 2 2-.895 2-2-.895-2-2-2z"/>
+        </svg>
+      </div>
+      <h1 class="text-3xl font-bold mb-2">Ubuntu Web OS</h1>
+      <p class="text-gray-400 mb-8 text-sm">仮想ファイルシステム (8MiB VFS) へようこそ</p>
+
+      <!-- Step 1: Choose Boot Option -->
+      <div id="boot-options" class="space-y-4">
+        <button onclick="showCreateDisk()" class="w-full py-3 px-4 bg-[#e95420] hover:bg-[#cf4a1b] font-semibold rounded text-white transition duration-200">
+          新規仮想ディスクを作成して起動
+        </button>
+        <button onclick="showLoadDisk()" class="w-full py-3 px-4 bg-[#5e2750] hover:bg-[#4a1e3f] font-semibold rounded text-white border border-[#aea79f] transition duration-200">
+          既存の仮想ディスクを読み込む
+        </button>
+      </div>
+
+      <!-- Step 2A: Create Disk Form -->
+      <div id="create-disk-form" class="hidden text-left bg-[#3d0c2f] p-6 rounded shadow-lg border border-[#5e2750] space-y-4">
+        <h2 class="text-lg font-bold text-[#e95420] border-b border-[#5e2750] pb-2">仮想ドライブ新規作成</h2>
+        <div>
+          <label class="block text-xs text-gray-300 mb-1">ユーザー名 (User Name)</label>
+          <input type="text" id="new-username" value="ubuntu" class="w-full bg-[#2c001e] border border-[#aea79f] p-2 rounded text-white text-sm outline-none focus:border-[#e95420]">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-300 mb-1">パスワード (Password)</label>
+          <input type="password" id="new-password" value="ubuntu" class="w-full bg-[#2c001e] border border-[#aea79f] p-2 rounded text-white text-sm outline-none focus:border-[#e95420]">
+        </div>
+        <div class="text-xs text-gray-400 bg-[#2c001e] p-2 rounded leading-relaxed">
+          ※作成時、システム確保領域およびデフォルト構造を含む仮想ディスクファイル（約8MiB分のデータを含むZIP想定のJSONファイル）が生成・自動ダウンロードされます。
+        </div>
+        <div class="flex space-x-2 pt-2">
+          <button onclick="cancelBootStep()" class="flex-1 py-2 bg-gray-600 hover:bg-gray-700 rounded text-sm font-semibold">戻る</button>
+          <button onclick="handleCreateDisk()" class="flex-1 py-2 bg-[#e95420] hover:bg-[#cf4a1b] rounded text-sm font-semibold">作成して起動</button>
+        </div>
+      </div>
+
+      <!-- Step 2B: Load Disk Form -->
+      <div id="load-disk-form" class="hidden text-left bg-[#3d0c2f] p-6 rounded shadow-lg border border-[#5e2750] space-y-4">
+        <h2 class="text-lg font-bold text-[#e95420] border-b border-[#5e2750] pb-2">仮想ドライブ読み込み</h2>
+        
+        <!-- Drag & Drop Area -->
+        <div id="drop-zone" class="border-2 border-dashed border-[#aea79f] hover:border-[#e95420] rounded p-6 text-center cursor-pointer transition"
+             onclick="document.getElementById('disk-file-input').click()">
+          <p class="text-xs text-gray-300">ここに仮想ディスクファイル (.json) をドラッグ＆ドロップ、またはクリックして選択</p>
+          <input type="file" id="disk-file-input" class="hidden" accept=".json" onchange="handleFileSelect(event)">
+          <div id="selected-file-name" class="mt-2 text-xs text-[#e95420] font-semibold"></div>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-300 mb-1">ユーザー名</label>
+          <input type="text" id="load-username" class="w-full bg-[#2c001e] border border-[#aea79f] p-2 rounded text-white text-sm outline-none" placeholder="ubuntu">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-300 mb-1">パスワード</label>
+          <input type="password" id="load-password" class="w-full bg-[#2c001e] border border-[#aea79f] p-2 rounded text-white text-sm outline-none" placeholder="••••••••">
+        </div>
+        
+        <div id="load-error-msg" class="text-xs text-red-400 hidden"></div>
+
+        <div class="flex space-x-2 pt-2">
+          <button onclick="cancelBootStep()" class="flex-1 py-2 bg-gray-600 hover:bg-gray-700 rounded text-sm font-semibold">戻る</button>
+          <button onclick="handleLoadDisk()" class="flex-1 py-2 bg-[#e95420] hover:bg-[#cf4a1b] rounded text-sm font-semibold">マウントして起動</button>
+        </div>
+      </div>
+
+      <!-- Booting Progress Indicator -->
+      <div id="boot-loading" class="hidden mt-8 space-y-2">
+        <div class="w-full bg-gray-700 h-1.5 rounded overflow-hidden">
+          <div class="bg-[#e95420] h-full w-0 animate-[pulse_1.5s_infinite]" style="width: 100%"></div>
+        </div>
+        <p class="text-xs text-gray-400" id="boot-status-text">仮想システムを構築中...</p>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ==================== 2. MAIN DESKTOP ENVIRONMENT ==================== -->
+  <div id="desktop-env" class="hidden w-full h-full flex flex-col relative overflow-hidden">
+
+    <!-- Top Bar -->
+    <header class="h-7 bg-[#111111] text-xs px-4 flex items-center justify-between select-none z-40 text-[#dfdbd2]">
+      <div class="flex items-center space-x-4">
+        <span class="font-bold hover:text-white cursor-pointer" onclick="toggleActivities()">アクティビティ</span>
+        <span class="hover:text-white cursor-pointer" id="current-focused-app">デスクトップ</span>
+      </div>
+      <!-- Center Clock -->
+      <div class="absolute left-1/2 -translate-x-1/2 font-semibold" id="top-bar-clock">
+        6月 20日 16:54
+      </div>
+      <!-- Right Status Area -->
+      <div class="flex items-center space-x-3">
+        <i class="lucide-wifi w-3.5 h-3.5"></i>
+        <i class="lucide-volume-2 w-3.5 h-3.5"></i>
+        <i class="lucide-battery w-3.5 h-3.5"></i>
+        <span class="hover:text-white cursor-pointer" onclick="openSystemSettings()" id="top-user-indicator">ubuntu</span>
+      </div>
+    </header>
+
+    <!-- Desktop Body Area -->
+    <div class="flex-1 flex relative overflow-hidden">
+      
+      <!-- Ubuntu Left Dock (Launcher) -->
+      <aside class="w-16 bg-[#111111]/85 backdrop-blur-sm flex flex-col items-center py-4 space-y-4 z-40 border-r border-[#2d2d2d]">
+        <!-- Terminal Launcher -->
+        <button onclick="openApp('terminal')" class="group relative p-2.5 rounded-lg hover:bg-white/10 transition" title="端末 (Terminal)">
+          <div class="w-10 h-10 bg-[#300a24] border border-[#dfdbd2]/20 rounded-md flex items-center justify-center text-green-400 font-mono text-lg font-bold shadow-md">
+            &gt;_
+          </div>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-neutral-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none">端末 (Terminal)</span>
+        </button>
+
+        <!-- File Manager Launcher -->
+        <button onclick="openApp('files')" class="group relative p-2.5 rounded-lg hover:bg-white/10 transition" title="ファイルマネージャ">
+          <div class="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-md flex items-center justify-center text-white shadow-md">
+            <i class="lucide-folder-open w-6 h-6"></i>
+          </div>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-neutral-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none">ファイル</span>
+        </button>
+
+        <!-- File Uploader Launcher -->
+        <button onclick="openApp('uploader')" class="group relative p-2.5 rounded-lg hover:bg-white/10 transition" title="ファイルアップローダー">
+          <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-md flex items-center justify-center text-white shadow-md">
+            <i class="lucide-upload-cloud w-6 h-6"></i>
+          </div>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-neutral-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none">アップローダー</span>
+        </button>
+
+        <!-- System Settings Launcher -->
+        <button onclick="openApp('settings')" class="group relative p-2.5 rounded-lg hover:bg-white/10 transition" title="システム設定">
+          <div class="w-10 h-10 bg-neutral-700 rounded-md flex items-center justify-center text-white shadow-md">
+            <i class="lucide-settings w-6 h-6"></i>
+          </div>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-neutral-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none">設定</span>
+        </button>
+
+        <div class="flex-grow"></div>
+
+        <!-- Shutdown Indicator -->
+        <button onclick="systemShutdown()" class="group relative p-2.5 rounded-lg hover:bg-red-900/40 transition text-red-500 hover:text-red-400" title="OSシャットダウン (セーブ)">
+          <i class="lucide-power w-6 h-6"></i>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-neutral-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none">シャットダウン</span>
+        </button>
+      </aside>
+
+      <!-- Interactive Desktop Area -->
+      <main id="desktop-grid" class="flex-1 relative overflow-hidden p-6" ondragover="event.preventDefault()" ondrop="handleDesktopFileDrop(event)">
+        <!-- Grid for desktop icons (Dynamically Populated) -->
+        <div id="desktop-icons" class="grid grid-flow-row auto-rows-[90px] grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-4 justify-items-center select-none">
+          <!-- Dynamic Desktop Icons Rendered Here -->
+        </div>
+
+        <!-- Windows Container -->
+        <div id="windows-container" class="absolute inset-0 pointer-events-none z-10">
+          <!-- Windows will be injected here via javascript -->
+        </div>
+      </main>
+
+    </div>
+  </div>
+
+
+  <!-- ==================== 3. MODAL / DIALOGS ==================== -->
+  <!-- Generic HTML Execution Dialog -->
+  <div id="html-runner-modal" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center z-[110]">
+    <div class="bg-[#2d2d2d] w-[90%] h-[85%] rounded-lg shadow-2xl flex flex-col border border-neutral-600 overflow-hidden">
+      <!-- Header -->
+      <div class="bg-[#1e1e1e] px-4 py-2 flex items-center justify-between text-sm select-none">
+        <span class="font-bold flex items-center text-green-400">
+          <i class="lucide-play-circle w-4 h-4 mr-2"></i>
+          仮想HTMLランナー: <span id="runner-title" class="ml-1 text-white">preview.html</span>
+        </span>
+        <button onclick="closeHtmlRunner()" class="text-gray-400 hover:text-white">
+          <i class="lucide-x w-5 h-5"></i>
+        </button>
+      </div>
+      <!-- Virtual URL / Navigation Info -->
+      <div class="bg-[#252526] px-4 py-1.5 text-xs text-gray-400 flex items-center justify-between border-b border-neutral-700">
+        <span class="flex items-center">
+          <i class="lucide-globe w-3 h-3 mr-1"></i>
+          <span id="runner-virtual-path">vfs://home/ubuntu/Desktop/preview.html</span>
+        </span>
+        <span class="text-yellow-500 font-semibold text-[10px] bg-yellow-950 px-2 py-0.5 rounded">隔離サンドボックス</span>
+      </div>
+      <!-- Viewport Frame -->
+      <iframe id="html-runner-iframe" class="flex-grow w-full bg-white text-black border-none"></iframe>
+    </div>
+  </div>
+
+  <!-- Text / Code Editor Window Model (Modal representation for fast workflow) -->
+  <div id="editor-modal" class="hidden absolute inset-0 bg-black/50 flex items-center justify-center z-[105]">
+    <div class="bg-[#1e1e1e] w-[80%] h-[80%] rounded-lg border border-neutral-700 flex flex-col overflow-hidden shadow-2xl">
+      <div class="bg-[#2d2d2d] px-4 py-2 flex items-center justify-between text-sm">
+        <span class="font-bold text-sm flex items-center text-amber-500">
+          <i class="lucide-edit-3 w-4 h-4 mr-2"></i>
+          テキストエディタ: <span id="editor-filename" class="ml-1 text-white"></span>
+        </span>
+        <div class="flex items-center space-x-3">
+          <button onclick="saveAndCloseEditor()" class="px-3 py-1 bg-green-700 hover:bg-green-600 rounded text-xs text-white font-semibold">保存して閉じる</button>
+          <button onclick="closeEditor()" class="text-gray-400 hover:text-white">
+            <i class="lucide-x w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+      <div class="flex-grow relative">
+        <textarea id="editor-textarea" class="absolute inset-0 w-full h-full bg-[#1e1e1e] text-green-300 font-mono p-4 outline-none resize-none text-sm leading-relaxed" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== 4. SCRIPT SECTION 1: STORAGE & INTEGRITY ==================== -->
+  <script>
+    /**
+     * SCRIPT 1: Storage Config, State Persistence & Virtual Disk Package Maker (8MiB)
+     * * このセクションは、仮想ファイルシステム(VFS)全体のステート管理と、
+     * ディスクのエクスポート、データの整合性、ユーザー設定などの維持を担当します。
+     * 2回目以降は、このファイルから生成された「仮想ディスク.json」を起動画面でマウントするだけで動作可能です。
+     */
+
+    // 仮想アプリID
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'ubuntu-webfs-v1';
+
+    // 仮想ファイルシステムの基本構造
+    // 8MiBの仮想ディスク制限を満たすための設計、及び初期化メソッド
+    let VFS = {
+      user: {
+        username: "ubuntu",
+        password: "ubuntu" // 簡単な認証用
+      },
+      settings: {
+        themeColor: "#2c001e", // Ubuntu Plum
+        bgImage: "", // VFS内の画像パス。空ならthemeColorが優先
+        cursor: "default"
+      },
+      // 仮想階層構造
+      // 各キーは絶対パス。値は { type: 'file'|'dir', content: String, size: Number, mime: String }
+      files: {}
+    };
+
+    /**
+     * 8MiB相当のダミーアロケーションデータを含んだ初期構造ファイルを作成する
+     * ダウンロードさせることで、実質的な仮想ストレージのベースをローカルに確保させる
+     */
+    function generateNewVfs(username, password) {
+      const vfs = {
+        user: { username, password },
+        settings: {
+          themeColor: "#2c001e",
+          bgImage: "",
+          cursor: "default"
+        },
+        files: {
+          "/home": { type: "dir", size: 0 },
+          [`/home/${username}`]: { type: "dir", size: 0 },
+          [`/home/${username}/Desktop`]: { type: "dir", size: 0 },
+          [`/home/${username}/Downloads`]: { type: "dir", size: 0 },
+          [`/home/${username}/Documents`]: { type: "dir", size: 0 },
+          [`/home/${username}/Desktop/README.txt`]: {
+            type: "file",
+            content: "Ubuntu Web VFS 仮想環境へようこそ！\n\n・デスクトップ上のアイコンをダブルクリックすると開くことができます。\n・端末(Terminal)から Linux 風の各種ファイル操作が可能です。\n・sudo shutdown コマンドを実行、または左ドック下部の電源ボタンからディスクを保存して終了できます。\n・デスクトップの壁紙は『設定』からカスタマイズ可能です。",
+            size: 280,
+            mime: "text/plain"
+          },
+          [`/home/${username}/Desktop/お絵かきサンプル.html`]: {
+            type: "file",
+            content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Canvas Paint Sample</title>
+  <style>
+    body { margin: 0; background: #fafafa; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden;}
+    canvas { border: 2px solid #333; background: #fff; cursor: crosshair; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    h3 { margin: 5px; color: #333; }
+    p { margin: 2px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <h3>ブラウザ内仮想ペイント</h3>
+  <p>マウスをドラッグしてお絵かきができます</p>
+  <canvas id="paintCanvas" width="400" height="300"></canvas>
+  <button onclick="ctx.clearRect(0,0,400,300)" style="margin-top: 10px; padding: 6px 12px; background: #e95420; color: white; border: none; border-radius: 4px; cursor: pointer;">クリア</button>
+  <script>
+    const canvas = document.getElementById('paintCanvas');
+    const ctx = canvas.getContext('2d');
+    let painting = false;
+    ctx.strokeStyle = '#e95420';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    
+    canvas.addEventListener('mousedown', () => painting = true);
+    canvas.addEventListener('mouseup', () => { painting = false; ctx.beginPath(); });
+    canvas.addEventListener('mousemove', draw);
+    
+    function draw(e) {
+      if(!painting) return;
+      const rect = canvas.getBoundingClientRect();
+      ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    }
+  <\/script>
+</body>
+</html>`,
+            size: 1540,
+            mime: "text/html"
+          },
+          // 8MiB 相当のシステムダミーファイルを埋め込む (8MiB = 8,388,608 bytes)
+          // 仮想ディスクイメージの整合性と「ドライブをフォーマットして確保した」感覚を再現するため、
+          // 約8,000,000文字の空隙スペース（またはシステムゼロファイル）をアロケーション領域として格納します。
+          "/sys/allocation.dat": {
+            type: "file",
+            content: "0".repeat(8000000), // 8000000文字のダミーデータ (約8MB分)
+            size: 8000000,
+            mime: "application/octet-stream"
+          }
+        }
+      };
+      return vfs;
+    }
+
+    /**
+     * VFSを文字列シリアライズしてクライアントにファイルとしてダウンロードさせる (保存)
+     */
+    function exportVfsToDiskFile() {
+      const serialized = JSON.stringify(VFS);
+      const blob = new Blob([serialized], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ubuntu_virtual_disk_${VFS.user.username}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    /**
+     * 読み込まれたVFSファイルの構造チェックとユーザー認証
+     */
+    function validateAndMountVfs(vfsObject, username, password) {
+      if (!vfsObject || !vfsObject.user || !vfsObject.files) {
+        throw new Error("無効なディスク構造です。");
+      }
+      if (vfsObject.user.username !== username || vfsObject.user.password !== password) {
+        throw new Error("ユーザー名、またはパスワードが一致しません。");
+      }
+      // VFSのマウント
+      VFS = vfsObject;
+      return true;
+    }
+  </script>
+
+
+  <!-- ==================== 5. SCRIPT SECTION 2: RUNTIME CORE ENGINE ==================== -->
+  <script>
+    /**
+     * SCRIPT 2: OS Core Runtime (Ubuntu UI Controller, Terminal commands, VFS Access, App Handlers)
+     * * システムが正常にブート（仮想ディスクが選択・マウント）された後に動作する
+     * 必須のOS挙動制御スクリプトです。
+     */
+
+    let currentUser = "ubuntu";
+    let currentPath = `/home/ubuntu`; // ターミナルのカレントディレクトリ
+    let openWindows = {}; // 起動しているウィンドウの参照
+    let windowZIndexCounter = 30; // ウィンドウ重ね合わせ制御用
+    let editingFilePath = ""; // エディタ用バッファ
+
+    // UIパーツ切替制御用
+    function showCreateDisk() {
+      document.getElementById("boot-options").classList.add("hidden");
+      document.getElementById("create-disk-form").classList.remove("hidden");
+    }
+
+    function showLoadDisk() {
+      document.getElementById("boot-options").classList.add("hidden");
+      document.getElementById("load-disk-form").classList.remove("hidden");
+    }
+
+    function cancelBootStep() {
+      document.getElementById("create-disk-form").classList.add("hidden");
+      document.getElementById("load-disk-form").classList.add("hidden");
+      document.getElementById("boot-options").classList.remove("hidden");
+      document.getElementById("load-error-msg").classList.add("hidden");
+    }
+
+    // 新規仮想ディスクの生成ハンドラ
+    function handleCreateDisk() {
+      const user = document.getElementById("new-username").value.trim();
+      const pass = document.getElementById("new-password").value.trim();
+      
+      if (!user || !pass) {
+        customAlert("ユーザー名とパスワードを入力してください。");
+        return;
+      }
+
+      // ローディング開始
+      document.getElementById("create-disk-form").classList.add("hidden");
+      document.getElementById("boot-loading").classList.remove("hidden");
+
+      setTimeout(() => {
+        // VFSの生成・アサイン
+        VFS = generateNewVfs(user, pass);
+        currentUser = user;
+        currentPath = `/home/${user}`;
+        
+        // 生成した初期ディスクをダウンロード（8MiB分のデータを含む）
+        exportVfsToDiskFile();
+
+        document.getElementById("boot-status-text").innerText = "仮想OS起動完了...";
+        setTimeout(() => {
+          bootSystem();
+        }, 1000);
+      }, 1500);
+    }
+
+    // ドラッグアンドドロップによる仮想ディスクのロード
+    let loadedDiskContent = null;
+    const dropZone = document.getElementById("drop-zone");
+
+    // ドラッグ＆ドロップイベントリスナー
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("border-[#e95420]", "bg-[#4a1e3f]");
+    });
+
+    dropZone.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("border-[#e95420]", "bg-[#4a1e3f]");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("border-[#e95420]", "bg-[#4a1e3f]");
+      if (e.dataTransfer.files.length > 0) {
+        processSelectedDiskFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    function handleFileSelect(e) {
+      if (e.target.files.length > 0) {
+        processSelectedDiskFile(e.target.files[0]);
+      }
+    }
+
+    function processSelectedDiskFile(file) {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          loadedDiskContent = JSON.parse(evt.target.result);
+          document.getElementById("selected-file-name").innerText = `${file.name} (読み込み完了)`;
+        } catch(e) {
+          customAlert("ディスクファイルの解析に失敗しました。有効なJSON構造ではありません。");
+          loadedDiskContent = null;
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // 既存仮想ディスクのマウントと起動
+    function handleLoadDisk() {
+      const user = document.getElementById("load-username").value.trim();
+      const pass = document.getElementById("load-password").value.trim();
+      const errorDiv = document.getElementById("load-error-msg");
+
+      if (!loadedDiskContent) {
+        errorDiv.innerText = "仮想ディスクファイルを選択またはドロップしてください。";
+        errorDiv.classList.remove("hidden");
+        return;
+      }
+      if (!user || !pass) {
+        errorDiv.innerText = "認証用のユーザー名とパスワードを入力してください。";
+        errorDiv.classList.remove("hidden");
+        return;
+      }
+
+      try {
+        validateAndMountVfs(loadedDiskContent, user, pass);
+        currentUser = user;
+        currentPath = `/home/${user}`;
+
+        errorDiv.classList.add("hidden");
+        document.getElementById("load-disk-form").classList.add("hidden");
+        document.getElementById("boot-loading").classList.remove("hidden");
+
+        setTimeout(() => {
+          bootSystem();
+        }, 1500);
+
+      } catch(err) {
+        errorDiv.innerText = err.message;
+        errorDiv.classList.remove("hidden");
+      }
+    }
+
+    // システム全体のロード完了処理
+    function bootSystem() {
+      document.getElementById("boot-screen").classList.add("opacity-0", "pointer-events-none");
+      document.getElementById("desktop-env").classList.remove("hidden");
+      
+      // カスタム設定の適用
+      applySystemSettings();
+
+      // UI表示アップデート
+      document.getElementById("top-user-indicator").innerText = currentUser;
+
+      // 時計の更新開始
+      startClock();
+
+      // デスクトップ上に存在するファイル群をレンダリング
+      renderDesktopIcons();
+
+      // 初回起動時、ターミナルとファイルマネージャーを立ち上げておく
+      openApp("terminal");
+      openApp("files");
+    }
+
+    // 時計処理
+    function startClock() {
+      const clockEl = document.getElementById("top-bar-clock");
+      function update() {
+        const now = new Date();
+        const m = now.getMonth() + 1;
+        const d = now.getDate();
+        const h = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        clockEl.innerText = `${m}月 ${d}日 ${h}:${min}`;
+      }
+      setInterval(update, 1000);
+      update();
+    }
+
+    // システム設定の適用 (テーマ背景、カーソル等)
+    function applySystemSettings() {
+      const root = document.getElementById("desktop-root");
+      // 背景画像が指定されており、それが仮想ファイルシステム内にあるか
+      if (VFS.settings.bgImage && VFS.files[VFS.settings.bgImage] && VFS.files[VFS.settings.bgImage].type === 'file') {
+        // インラインデータスキームへの解決(簡易再現としてbase64想定。またはテキストデータそのものをインラインで入れる)
+        const fileObj = VFS.files[VFS.settings.bgImage];
+        if (fileObj.content.startsWith("data:image")) {
+          root.style.backgroundImage = `url('${fileObj.content}')`;
+          root.style.backgroundSize = "cover";
+          root.style.backgroundPosition = "center";
+        } else {
+          // テキスト色での塗りつぶし
+          root.style.background = VFS.settings.themeColor;
+        }
+      } else {
+        root.style.background = VFS.settings.themeColor;
+        root.style.backgroundImage = "none";
+      }
+
+      // カーソル設定
+      root.style.cursor = VFS.settings.cursor || "default";
+    }
+
+
+    /* ==================== 6. WINDOWS MANAGEMENT SYSTEM ==================== */
+    
+    // アプリ定義
+    const appTemplates = {
+      terminal: {
+        title: "端末 (Terminal)",
+        icon: "lucide-terminal",
+        width: 600,
+        height: 400,
+        content: `
+          <div class="flex-grow flex flex-col bg-black/95 text-green-400 p-2 terminal-body font-mono text-sm overflow-y-auto leading-relaxed h-full" id="term-body-[id]" onclick="focusTerminal('[id]')">
+            <div id="term-output-[id]">
+              <div>Welcome to Ubuntu Web OS Virtual Terminal v1.0</div>
+              <div>Type <span class="text-white font-bold">help</span> to see available commands.</div>
+              <br>
+            </div>
+            <div class="flex items-center">
+              <span class="text-green-500 font-semibold shrink-0" id="term-prompt-[id]">ubuntu@webfs:~$</span>
+              <input type="text" id="term-input-[id]" class="bg-transparent text-green-300 border-none outline-none flex-grow ml-2 font-mono" onkeydown="handleTerminalCommand(event, '[id]')">
+            </div>
+          </div>
+        `
+      },
+      files: {
+        title: "ファイルマネージャ",
+        icon: "lucide-folder",
+        width: 700,
+        height: 450,
+        content: `
+          <div class="flex-grow flex flex-col bg-[#2a2a2a] text-white h-full overflow-hidden" id="files-body-[id]">
+            <!-- File Manager Top bar -->
+            <div class="bg-[#1e1e1e] p-2 flex items-center justify-between border-b border-neutral-700">
+              <div class="flex items-center space-x-2">
+                <button onclick="goUpDirectory('[id]')" class="p-1 hover:bg-neutral-700 rounded transition" title="親フォルダへ">
+                  <i class="lucide-arrow-up w-4 h-4"></i>
+                </button>
+                <div class="text-xs text-neutral-400 bg-neutral-900 px-3 py-1.5 rounded flex items-center border border-neutral-800" style="min-width: 250px;">
+                  <i class="lucide-hard-drive w-3.5 h-3.5 mr-1.5 text-amber-500"></i>
+                  <span id="files-path-display-[id]">/home/ubuntu</span>
+                </div>
+              </div>
+              <!-- Action Controls -->
+              <div class="flex space-x-1">
+                <button onclick="showCreateNewDialog('[id]', 'file')" class="px-2 py-1 bg-[#e95420] text-xs font-semibold rounded hover:bg-[#cf4a1b]" title="新しいファイルを作成">
+                  + ファイル
+                </button>
+                <button onclick="showCreateNewDialog('[id]', 'dir')" class="px-2 py-1 bg-amber-600 text-xs font-semibold rounded hover:bg-amber-700" title="新しいディレクトリを作成">
+                  + フォルダ
+                </button>
+              </div>
+            </div>
+
+            <!-- Main Layout: Folder list -->
+            <div class="flex-1 flex overflow-hidden">
+              <!-- Left Sidebar Shortcuts -->
+              <div class="w-1/4 bg-[#1e1e1e] border-r border-neutral-800 p-2 text-xs space-y-1">
+                <div class="text-neutral-500 px-2 py-1 font-semibold">場所</div>
+                <button onclick="navigateToPath('[id]', '/home/' + currentUser)" class="w-full text-left px-2 py-1.5 hover:bg-[#4a1e3f] rounded flex items-center">
+                  <i class="lucide-home w-4 h-4 mr-2 text-purple-400"></i> ホーム
+                </button>
+                <button onclick="navigateToPath('[id]', '/home/' + currentUser + '/Desktop')" class="w-full text-left px-2 py-1.5 hover:bg-[#4a1e3f] rounded flex items-center">
+                  <i class="lucide-monitor w-4 h-4 mr-2 text-blue-400"></i> デスクトップ
+                </button>
+                <button onclick="navigateToPath('[id]', '/home/' + currentUser + '/Downloads')" class="w-full text-left px-2 py-1.5 hover:bg-[#4a1e3f] rounded flex items-center">
+                  <i class="lucide-download w-4 h-4 mr-2 text-green-400"></i> ダウンロード
+                </button>
+                <button onclick="navigateToPath('[id]', '/home/' + currentUser + '/Documents')" class="w-full text-left px-2 py-1.5 hover:bg-[#4a1e3f] rounded flex items-center">
+                  <i class="lucide-file-text w-4 h-4 mr-2 text-yellow-400"></i> ドキュメント
+                </button>
+              </div>
+
+              <!-- Right: Grid View of files -->
+              <div class="w-3/4 p-4 overflow-y-auto" id="files-grid-[id]" ondragover="event.preventDefault()" ondrop="handleFileManagerDrop(event, '[id]')">
+                <!-- Directory items will be injected here -->
+              </div>
+            </div>
+          </div>
+        `
+      },
+      uploader: {
+        title: "ファイルアップローダー",
+        icon: "lucide-upload",
+        width: 500,
+        height: 380,
+        content: `
+          <div class="flex-grow flex flex-col bg-[#2e2e2e] p-6 text-center select-none h-full justify-between">
+            <h3 class="text-lg font-bold text-white">実機から仮想OSへファイルのアップロード</h3>
+            <p class="text-xs text-gray-400">アップロードしたファイルは <strong>~/Downloads</strong> ディレクトリに即座に配置されます。</p>
+
+            <!-- Drop area -->
+            <div id="uploader-drop-[id]" class="border-2 border-dashed border-gray-500 hover:border-[#e95420] bg-[#1e1e1e] rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer transition my-4"
+                 onclick="document.getElementById('uploader-input-[id]').click()">
+              <i class="lucide-upload-cloud w-12 h-12 text-[#e95420] mb-2"></i>
+              <span class="text-sm text-gray-300">ファイルをドロップまたはクリック</span>
+              <span class="text-[10px] text-gray-500 mt-1">実機のファイルシステムから仮想環境に取り込みます</span>
+              <input type="file" id="uploader-input-[id]" class="hidden" multiple onchange="uploadRealFiles(event, '[id]')">
+            </div>
+
+            <!-- Upload list summary -->
+            <div class="text-left bg-neutral-900 p-2 rounded max-h-24 overflow-y-auto text-xs text-gray-400 font-mono" id="uploader-log-[id]">
+              ログ: 待機中...
+            </div>
+          </div>
+        `
+      },
+      settings: {
+        title: "システム設定",
+        icon: "lucide-settings",
+        width: 500,
+        height: 400,
+        content: `
+          <div class="flex-grow flex flex-col bg-[#2a2a2a] p-4 text-white space-y-4 overflow-y-auto h-full text-sm">
+            <h2 class="text-base font-bold border-b border-neutral-700 pb-2 text-[#e95420]">外観と壁紙のカスタマイズ</h2>
+            
+            <!-- Quick Color -->
+            <div class="space-y-2">
+              <label class="block text-xs text-gray-400 font-semibold">デスクトップテーマ背景色</label>
+              <div class="flex space-x-2">
+                <button onclick="setThemeBgColor('#2c001e')" class="w-8 h-8 rounded-full border-2 border-white bg-[#2c001e]" title="Ubuntu Plum"></button>
+                <button onclick="setThemeBgColor('#002b36')" class="w-8 h-8 rounded-full border-2 border-neutral-600 bg-[#002b36]" title="Solarized Dark"></button>
+                <button onclick="setThemeBgColor('#111111')" class="w-8 h-8 rounded-full border-2 border-neutral-600 bg-neutral-900" title="Midnight Black"></button>
+                <button onclick="setThemeBgColor('#4a5568')" class="w-8 h-8 rounded-full border-2 border-neutral-600 bg-slate-600" title="Classic Slate"></button>
+              </div>
+            </div>
+
+            <!-- Custom BG Path -->
+            <div class="space-y-2">
+              <label class="block text-xs text-gray-400 font-semibold">仮想ディスク内の画像から壁紙設定</label>
+              <p class="text-[10px] text-gray-400 leading-relaxed">
+                ※仮想OS内の画像パス (例: /home/ubuntu/Downloads/wallpaper.png など) を入力します。Base64や画像データを読み込んだテキストファイルを指定可能です。
+              </p>
+              <div class="flex space-x-2">
+                <input type="text" id="settings-bg-input" class="bg-neutral-900 border border-neutral-700 rounded p-1.5 text-xs flex-grow outline-none text-green-400" placeholder="/home/ubuntu/Downloads/bg.txt">
+                <button onclick="saveBgPath()" class="px-3 py-1 bg-[#e95420] text-xs font-semibold rounded hover:bg-[#cf4a1b]">適用</button>
+              </div>
+            </div>
+
+            <!-- Cursor Option -->
+            <div class="space-y-2">
+              <label class="block text-xs text-gray-400 font-semibold">カーソルの種類</label>
+              <select id="settings-cursor" onchange="setSystemCursor(this.value)" class="bg-neutral-900 border border-neutral-700 rounded p-1.5 text-xs w-full text-white outline-none">
+                <option value="default">デフォルト (標準)</option>
+                <option value="crosshair">十字架 (クロスヘア)</option>
+                <option value="text">テキスト入力</option>
+                <option value="pointer">ポインター (手形)</option>
+              </select>
+            </div>
+
+            <!-- Disk info info -->
+            <div class="bg-neutral-900/60 p-3 rounded text-xs space-y-1 text-gray-400 border border-neutral-800">
+              <div class="font-semibold text-white">仮想ディスク情報</div>
+              <div id="settings-disk-usage">使用済み容量: 計算中...</div>
+              <div>最大論理容量制限: 8MiB</div>
+            </div>
+          </div>
+        `
+      }
+    };
+
+    /**
+     * 新しく仮想ウィンドウを開く
+     */
+    function openApp(appKey) {
+      const template = appTemplates[appKey];
+      if (!template) return;
+
+      const id = `${appKey}_${Date.now()}`;
+      
+      // ウィンドウ初期座標のばらつきを付与
+      const offsetCount = Object.keys(openWindows).length;
+      const leftX = 120 + (offsetCount * 25) % 300;
+      const topY = 60 + (offsetCount * 25) % 200;
+
+      const windowHtml = `
+        <div id="${id}" class="absolute bg-[#1e1e1e] text-white rounded-lg shadow-2xl border border-[#3c3c3c] flex flex-col pointer-events-auto select-none overflow-hidden window-active" 
+             style="width: ${template.width}px; height: ${template.height}px; left: ${leftX}px; top: ${topY}px; z-index: ${windowZIndexCounter++}"
+             onclick="bringToFront('${id}')">
+          <!-- Window Header (Ubuntu Style title bar) -->
+          <div class="bg-[#2d2d2d] h-9 px-3 flex items-center justify-between cursor-move shrink-0 border-b border-neutral-800" 
+               onmousedown="dragStart(event, '${id}')">
+            <!-- App Name & Icon -->
+            <div class="flex items-center space-x-2">
+              <span class="text-xs font-bold text-[#dfdbd2] flex items-center">
+                <i class="${template.icon} w-3.5 h-3.5 mr-1 text-[#e95420]"></i>
+                ${template.title}
+              </span>
+            </div>
+            <!-- Header Controls (Ubuntu alignment right) -->
+            <div class="flex items-center space-x-2">
+              <button onclick="minimizeWindow('${id}')" class="w-4 h-4 rounded-full bg-neutral-600 hover:bg-neutral-500 flex items-center justify-center text-[10px] text-white">─</button>
+              <button onclick="toggleMaximizeWindow('${id}')" class="w-4 h-4 rounded-full bg-neutral-600 hover:bg-neutral-500 flex items-center justify-center text-[8px] text-white">⬜</button>
+              <button onclick="closeWindow('${id}')" class="w-4 h-4 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center text-[9px] text-white">✕</button>
+            </div>
+          </div>
+          <!-- Window Inner Content -->
+          <div class="flex-grow overflow-hidden flex flex-col relative">
+            ${template.content.replace(/\[id\]/g, id)}
+          </div>
+        </div>
+      `;
+
+      // コンテナに追加
+      const container = document.getElementById("windows-container");
+      container.insertAdjacentHTML("beforeend", windowHtml);
+
+      // ウィンドウ管理オブジェクトに記憶
+      openWindows[id] = {
+        id: id,
+        appKey: appKey,
+        isMaximized: false,
+        prevLeft: `${leftX}px`,
+        prevTop: `${topY}px`,
+        prevWidth: `${template.width}px`,
+        prevHeight: `${template.height}px`
+      };
+
+      // 特異的なアプリ起動処理
+      if (appKey === 'terminal') {
+        initTerminal(id);
+      } else if (appKey === 'files') {
+        initFileManager(id);
+      } else if (appKey === 'settings') {
+        initSettingsPanel();
+      }
+
+      // フォーカス対象をヘッダーへ通知
+      document.getElementById("current-focused-app").innerText = template.title;
+      bringToFront(id);
+    }
+
+    // 重ね合わせの一番上にする
+    function bringToFront(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      
+      // 他のすべてをinactiveにする
+      Object.keys(openWindows).forEach(winId => {
+        const otherEl = document.getElementById(winId);
+        if (otherEl) {
+          otherEl.classList.remove("window-active");
+          otherEl.classList.add("window-inactive");
+        }
+      });
+
+      el.classList.add("window-active");
+      el.classList.remove("window-inactive");
+      el.style.zIndex = windowZIndexCounter++;
+      
+      const appKey = openWindows[id].appKey;
+      document.getElementById("current-focused-app").innerText = appTemplates[appKey].title;
+
+      if (appKey === 'terminal') {
+        const input = document.getElementById(`term-input-${id}`);
+        if (input) input.focus();
+      }
+    }
+
+    // ウィンドウ削除
+    function closeWindow(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+      delete openWindows[id];
+      document.getElementById("current-focused-app").innerText = "デスクトップ";
+    }
+
+    // 最小化（Ubuntu風の簡易挙動としてフェードアウトクローズとみなす）
+    function minimizeWindow(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.transform = "scale(0.8)";
+        el.style.opacity = "0";
+        el.style.pointerEvents = "none";
+        setTimeout(() => {
+          el.style.transform = "none";
+          el.style.opacity = "1";
+          el.style.pointerEvents = "auto";
+        }, 3000); // 3秒後に戻るデモ挙動
+      }
+    }
+
+    // 最大化・トグル
+    function toggleMaximizeWindow(id) {
+      const el = document.getElementById(id);
+      const wState = openWindows[id];
+      if (!el || !wState) return;
+
+      if (!wState.isMaximized) {
+        // 現在の値を退避
+        wState.prevLeft = el.style.left;
+        wState.prevTop = el.style.top;
+        wState.prevWidth = el.style.width;
+        wState.prevHeight = el.style.height;
+
+        // 最大化スタイル
+        el.style.left = "0px";
+        el.style.top = "0px";
+        el.style.width = "100%";
+        el.style.height = "100%";
+        wState.isMaximized = true;
+      } else {
+        // 元に戻す
+        el.style.left = wState.prevLeft;
+        el.style.top = wState.prevTop;
+        el.style.width = wState.prevWidth;
+        el.style.height = wState.prevHeight;
+        wState.isMaximized = false;
+      }
+    }
+
+    // ドラッグ＆ドロップ移動
+    let dragObj = null;
+    let dragStartX = 0, dragStartY = 0;
+    let dragStartLeft = 0, dragStartTop = 0;
+
+    function dragStart(e, id) {
+      dragObj = document.getElementById(id);
+      if (!dragObj) return;
+
+      bringToFront(id);
+
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      dragStartLeft = parseInt(dragObj.style.left) || 0;
+      dragStartTop = parseInt(dragObj.style.top) || 0;
+
+      document.addEventListener("mousemove", dragMove);
+      document.addEventListener("mouseup", dragEnd);
+    }
+
+    function dragMove(e) {
+      if (!dragObj) return;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      
+      // デスクトップの高さ・幅の中で自由に移動可能
+      dragObj.style.left = `${dragStartLeft + dx}px`;
+      dragObj.style.top = `${dragStartTop + dy}px`;
+    }
+
+    function dragEnd() {
+      dragObj = null;
+      document.removeEventListener("mousemove", dragMove);
+      document.removeEventListener("mouseup", dragEnd);
+    }
+
+
+    /* ==================== 7. TERMINAL LOGIC ==================== */
+    
+    // コマンド履歴保持用
+    let commandHistory = [];
+    let historyIndex = -1;
+
+    function initTerminal(id) {
+      const prompt = document.getElementById(`term-prompt-${id}`);
+      if (prompt) {
+        prompt.innerText = `${currentUser}@ubuntu:${getPrettyPath(currentPath)}$ `;
+      }
+      focusTerminal(id);
+    }
+
+    function focusTerminal(id) {
+      const input = document.getElementById(`term-input-${id}`);
+      if (input) input.focus();
+    }
+
+    function handleTerminalCommand(e, id) {
+      if (e.key === "Enter") {
+        const input = document.getElementById(`term-input-${id}`);
+        const commandLine = input.value.trim();
+        if (commandLine) {
+          executeCommand(commandLine, id);
+          commandHistory.push(commandLine);
+          historyIndex = commandHistory.length;
+        }
+        input.value = "";
+      } else if (e.key === "ArrowUp") {
+        // 履歴を遡る
+        if (historyIndex > 0) {
+          historyIndex--;
+          e.target.value = commandHistory[historyIndex];
+        }
+      } else if (e.key === "ArrowDown") {
+        if (historyIndex < commandHistory.length - 1) {
+          historyIndex++;
+          e.target.value = commandHistory[historyIndex];
+        } else {
+          historyIndex = commandHistory.length;
+          e.target.value = "";
+        }
+      }
+    }
+
+    function executeCommand(cmdStr, id) {
+      const output = document.getElementById(`term-output-${id}`);
+      const prompt = document.getElementById(`term-prompt-${id}`);
+      const termBody = document.getElementById(`term-body-${id}`);
+
+      // エコー表示
+      output.innerHTML += `<div class="text-white">${prompt.innerText} ${cmdStr}</div>`;
+
+      const args = cmdStr.split(/\s+/);
+      const cmd = args[0].toLowerCase();
+
+      let resultHtml = "";
+
+      switch(cmd) {
+        case "help":
+          resultHtml = `
+            <div class="text-yellow-400">使用可能な仮想コマンド一覧:</div>
+            <div class="grid grid-cols-[120px_1fr] gap-x-2 text-xs">
+              <div>help</div><div>このコマンドヘルプを表示します。</div>
+              <div>ls</div><div>現在のフォルダ内のファイル・フォルダを表示します。</div>
+              <div>cd [path]</div><div>仮想ディレクトリを移動します。</div>
+              <div>cat [file]</div><div>テキストファイルの内容を出力します。</div>
+              <div>mkdir [name]</div><div>フォルダ（ディレクトリ）を新規作成します。</div>
+              <div>rm [file/dir]</div><div>ファイルまたはフォルダを削除します。</div>
+              <div>clear</div><div>画面をクリアします。</div>
+              <div>whoami</div><div>現在のユーザー名を表示します。</div>
+              <div>sudo shutdown</div><div>【重要】これまでのファイルシステムの状態を保存（ファイルダウンロード）してシステムを終了します。</div>
+              <div>sudo import [URL]</div><div>指定のURLからHTML/JSファイルを仮想OSに安全に取り込みます。</div>
+            </div>
+          `;
+          break;
+
+        case "clear":
+          output.innerHTML = "";
+          break;
+
+        case "whoami":
+          resultHtml = `<div>${currentUser}</div>`;
+          break;
+
+        case "ls":
+          resultHtml = getListDirectoryHtml(currentPath);
+          break;
+
+        case "cd":
+          const target = args[1];
+          if (!target) {
+            currentPath = `/home/${currentUser}`;
+          } else {
+            const resolved = resolvePath(currentPath, target);
+            if (VFS.files[resolved] && VFS.files[resolved].type === 'dir') {
+              currentPath = resolved;
+            } else {
+              resultHtml = `<div class="text-red-400">エラー: cd: ${target}: そのようなディレクトリはありません。</div>`;
+            }
+          }
+          break;
+
+        case "cat":
+          const catFile = args[1];
+          if (!catFile) {
+            resultHtml = `<div class="text-red-400">引数を入力してください。 cat [ファイルパス]</div>`;
+          } else {
+            const resolvedCat = resolvePath(currentPath, catFile);
+            if (VFS.files[resolvedCat] && VFS.files[resolvedCat].type === 'file') {
+              const fileData = VFS.files[resolvedCat];
+              resultHtml = `<div class="whitespace-pre text-gray-300 bg-neutral-900 p-2 rounded leading-normal border border-neutral-800">${escapeHtml(fileData.content)}</div>`;
+            } else {
+              resultHtml = `<div class="text-red-400">エラー: cat: ${catFile}: ファイルが見つかりません。</div>`;
+            }
+          }
+          break;
+
+        case "mkdir":
+          const dirName = args[1];
+          if (!dirName) {
+            resultHtml = `<div class="text-red-400">作成するディレクトリ名を入力してください。</div>`;
+          } else {
+            const newDirPath = resolvePath(currentPath, dirName);
+            if (VFS.files[newDirPath]) {
+              resultHtml = `<div class="text-red-400">すでに同名のファイルまたはフォルダが存在します。</div>`;
+            } else {
+              VFS.files[newDirPath] = { type: 'dir', size: 0 };
+              resultHtml = `<div>ディレクトリを作成しました: ${getPrettyPath(newDirPath)}</div>`;
+              refreshAllFileManagers();
+              renderDesktopIcons();
+            }
+          }
+          break;
+
+        case "rm":
+          const targetRm = args[1];
+          if (!targetRm) {
+            resultHtml = `<div class="text-red-400">削除する対象を指定してください。 rm [パス]</div>`;
+          } else {
+            const targetRmPath = resolvePath(currentPath, targetRm);
+            if (VFS.files[targetRmPath]) {
+              // システム確保ファイルの削除防止
+              if (targetRmPath === "/sys/allocation.dat") {
+                resultHtml = `<div class="text-red-400">エラー: システム予約保護領域のため削除できません。</div>`;
+              } else {
+                delete VFS.files[targetRmPath];
+                // サブディレクトリも一括削除（簡易実装）
+                Object.keys(VFS.files).forEach(k => {
+                  if (k.startsWith(targetRmPath + "/")) {
+                    delete VFS.files[k];
+                  }
+                });
+                resultHtml = `<div class="text-amber-400">${targetRm} を削除しました。</div>`;
+                refreshAllFileManagers();
+                renderDesktopIcons();
+              }
+            } else {
+              resultHtml = `<div class="text-red-400">対象が見つかりません。</div>`;
+            }
+          }
+          break;
+
+        case "sudo":
+          const sudoSub = args[1];
+          if (sudoSub === "shutdown") {
+            resultHtml = `<div class="text-yellow-400">仮想OSのシャットダウン処理を実行します。ディスク変更履歴を保存してダウンロードします...</div>`;
+            setTimeout(() => {
+              systemShutdown();
+            }, 1000);
+          } else if (sudoSub === "import") {
+            const importUrl = args[2];
+            if (!importUrl) {
+              resultHtml = `<div class="text-red-400">エラー: インポートURLを指定してください。 (例: sudo import https://...)</div>`;
+            } else {
+              resultHtml = `<div class="text-blue-400">外部URL "${importUrl}" からスクリプトまたはHTMLのインポートを開始します...</div>`;
+              importExternalScript(importUrl, id);
+            }
+          } else {
+            resultHtml = `<div class="text-red-400">エラー: sudo ${sudoSub || ""} コマンドは未定義か無効です。</div>`;
+          }
+          break;
+
+        default:
+          resultHtml = `<div class="text-red-400">コマンドが見つかりません: ${cmd}</div>`;
+      }
+
+      if (resultHtml) {
+        output.innerHTML += `<div>${resultHtml}</div>`;
+      }
+
+      // プロンプト最新化
+      prompt.innerText = `${currentUser}@ubuntu:${getPrettyPath(currentPath)}$ `;
+      
+      // スクロール底上げ
+      setTimeout(() => {
+        termBody.scrollTop = termBody.scrollHeight;
+      }, 50);
+    }
+
+    // 仮想ディレクトリ構成表示の構築
+    function getListDirectoryHtml(dirPath) {
+      const children = getDirectoryChildren(dirPath);
+      if (children.length === 0) return `<div class="text-gray-500">(空のディレクトリ)</div>`;
+      
+      let html = `<div class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2 text-xs">`;
+      children.forEach(item => {
+        const isDir = item.info.type === 'dir';
+        const color = isDir ? 'text-blue-400 font-bold' : 'text-gray-300';
+        const icon = isDir ? '📁' : '📄';
+        html += `<div class="${color}">${icon} ${item.name}</div>`;
+      });
+      html += `</div>`;
+      return html;
+    }
+
+
+    /* ==================== 8. FILE MANAGER & INTEGRATIVE LOGIC ==================== */
+    
+    function initFileManager(id) {
+      navigateToPath(id, `/home/${currentUser}`);
+    }
+
+    function navigateToPath(id, path) {
+      if (VFS.files[path] && VFS.files[path].type === 'dir') {
+        const displayEl = document.getElementById(`files-path-display-${id}`);
+        if (displayEl) {
+          displayEl.innerText = getPrettyPath(path);
+          // カレントパス状態を保持するために、HTML要素自体にデータ属性として埋め込む
+          displayEl.setAttribute("data-current-path", path);
+        }
+        renderFileManagerGrid(id, path);
+      }
+    }
+
+    function goUpDirectory(id) {
+      const displayEl = document.getElementById(`files-path-display-${id}`);
+      const curPath = displayEl.getAttribute("data-current-path") || "/";
+      if (curPath === "/") return;
+
+      const segments = curPath.split("/");
+      segments.pop();
+      let parentPath = segments.join("/");
+      if (!parentPath) parentPath = "/";
+      navigateToPath(id, parentPath);
+    }
+
+    function renderFileManagerGrid(id, dirPath) {
+      const grid = document.getElementById(`files-grid-${id}`);
+      if (!grid) return;
+
+      const children = getDirectoryChildren(dirPath);
+      grid.innerHTML = "";
+
+      if (children.length === 0) {
+        grid.innerHTML = `<div class="text-neutral-500 text-xs italic flex items-center justify-center h-full">フォルダは空です。ここにローカルファイルをドラッグ＆ドロップして配置できます。</div>`;
+        return;
+      }
+
+      let innerHtml = `<div class="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-4 select-none">`;
+
+      children.forEach(item => {
+        const isDir = item.info.type === 'dir';
+        const itemFullPath = item.path;
+        
+        // システムアロケーションダミーは隠蔽する
+        if (itemFullPath === "/sys/allocation.dat") return;
+
+        let iconColor = "text-amber-500";
+        let iconName = "lucide-folder";
+        let clickAction = `MapsToPath('${id}', '${itemFullPath}')`;
+
+        if (!isDir) {
+          iconColor = "text-gray-300";
+          iconName = "lucide-file-text";
+          
+          if (itemFullPath.endsWith(".html")) {
+            iconColor = "text-orange-500";
+            iconName = "lucide-file-code";
+          } else if (itemFullPath.endsWith(".js") || itemFullPath.endsWith(".css")) {
+            iconColor = "text-yellow-400";
+            iconName = "lucide-file-code";
+          }
+          clickAction = `handleFileDoubleClick('${itemFullPath}')`;
+        }
+
+        innerHtml += `
+          <div class="flex flex-col items-center p-2 rounded hover:bg-[#4a1e3f]/40 cursor-pointer text-center relative group" 
+               ondblclick="${clickAction}">
+            <!-- Icon -->
+            <div class="mb-1.5">
+              <i class="${iconName} w-10 h-10 ${iconColor}"></i>
+            </div>
+            <!-- Name -->
+            <div class="text-[11px] font-medium leading-tight truncate w-full px-1 text-gray-200" title="${item.name}">${item.name}</div>
+            
+            <!-- Quick Options Overlay Menu -->
+            <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 flex space-x-1 bg-black/80 rounded p-0.5 text-[9px]">
+              <button onclick="event.stopPropagation(); renameFileDialog('${itemFullPath}', '${id}')" title="名前変更" class="hover:text-blue-400 p-0.5"><i class="lucide-edit-2 w-3 h-3"></i></button>
+              <button onclick="event.stopPropagation(); deleteFile('${itemFullPath}', '${id}')" title="削除" class="hover:text-red-400 p-0.5"><i class="lucide-trash w-3 h-3"></i></button>
+            </div>
+          </div>
+        `;
+      });
+
+      innerHtml += `</div>`;
+      grid.innerHTML = innerHtml;
+    }
+
+    // デスクトップ上に存在するファイルのアイコン表示
+    function renderDesktopIcons() {
+      const desktopGrid = document.getElementById("desktop-icons");
+      if (!desktopGrid) return;
+      desktopGrid.innerHTML = "";
+
+      const desktopPath = `/home/${currentUser}/Desktop`;
+      const children = getDirectoryChildren(desktopPath);
+
+      children.forEach(item => {
+        const isDir = item.info.type === 'dir';
+        const itemFullPath = item.path;
+
+        let iconColor = "text-amber-500";
+        let iconName = "lucide-folder";
+        let dblClickAction = `openApp('files')`; // フォルダならファイルマネージャ起動
+
+        if (!isDir) {
+          iconColor = "text-white";
+          iconName = "lucide-file-text";
+          
+          if (itemFullPath.endsWith(".html")) {
+            iconColor = "text-orange-400";
+            iconName = "lucide-file-code";
+          }
+          dblClickAction = `handleFileDoubleClick('${itemFullPath}')`;
+        }
+
+        const iconHtml = `
+          <div class="flex flex-col items-center justify-center p-2 rounded hover:bg-white/10 text-center cursor-pointer w-[76px] h-[86px] overflow-hidden" 
+               ondblclick="${dblClickAction}">
+            <div class="mb-1">
+              <i class="${iconName} w-8 h-8 ${iconColor} drop-shadow-md"></i>
+            </div>
+            <div class="text-[10px] text-white font-medium truncate w-full text-center leading-tight drop-shadow" title="${item.name}">
+              ${item.name}
+            </div>
+          </div>
+        `;
+        desktopGrid.insertAdjacentHTML("beforeend", iconHtml);
+      });
+    }
+
+    // 全てのファイルマネージャの表示をリフレッシュ
+    function refreshAllFileManagers() {
+      Object.keys(openWindows).forEach(winId => {
+        const w = openWindows[winId];
+        if (w.appKey === 'files') {
+          const displayEl = document.getElementById(`files-path-display-${winId}`);
+          if (displayEl) {
+            const curPath = displayEl.getAttribute("data-current-path") || `/home/${currentUser}`;
+            renderFileManagerGrid(winId, curPath);
+          }
+        }
+      });
+    }
+
+    // 新規ファイル・フォルダ作成ダイアログ
+    function showCreateNewDialog(id, type) {
+      const displayEl = document.getElementById(`files-path-display-${id}`);
+      const curPath = displayEl.getAttribute("data-current-path") || "/";
+      const defaultName = type === 'dir' ? '新しいフォルダ' : 'new_file.txt';
+
+      const inputName = prompt("名前を入力してください:", defaultName);
+      if (!inputName) return;
+
+      const newPath = resolvePath(curPath, inputName.trim());
+      if (VFS.files[newPath]) {
+        customAlert("すでに同名のオブジェクトが存在します。");
+        return;
+      }
+
+      if (type === 'dir') {
+        VFS.files[newPath] = { type: 'dir', size: 0 };
+      } else {
+        VFS.files[newPath] = { type: 'file', content: "", size: 0, mime: "text/plain" };
+      }
+
+      refreshAllFileManagers();
+      renderDesktopIcons();
+    }
+
+    // ファイル削除
+    function deleteFile(filePath, id) {
+      if (confirm(`本当に "${filePath.split('/').pop()}" を削除しますか？`)) {
+        if (filePath === "/sys/allocation.dat") {
+          customAlert("システム予約保護領域のため削除できません。");
+          return;
+        }
+        delete VFS.files[filePath];
+        
+        // サブアイテムの一括削除
+        Object.keys(VFS.files).forEach(k => {
+          if (k.startsWith(filePath + "/")) {
+            delete VFS.files[k];
+          }
+        });
+
+        refreshAllFileManagers();
+        renderDesktopIcons();
+      }
+    }
+
+    // ファイル名変更
+    function renameFileDialog(filePath, id) {
+      const oldName = filePath.split('/').pop();
+      const newName = prompt("新しい名前を入力してください:", oldName);
+      if (!newName || newName.trim() === oldName) return;
+
+      const parentDir = filePath.substring(0, filePath.lastIndexOf('/')) || "/";
+      const newFullPath = resolvePath(parentDir, newName.trim());
+
+      if (VFS.files[newFullPath]) {
+        customAlert("同名のファイルが存在します。");
+        return;
+      }
+
+      // VFSオブジェクトキーのスワップ
+      const targetObj = VFS.files[filePath];
+      VFS.files[newFullPath] = targetObj;
+      delete VFS.files[filePath];
+
+      // サブパスも書き換え
+      Object.keys(VFS.files).forEach(k => {
+        if (k.startsWith(filePath + "/")) {
+          const subNewPath = k.replace(filePath + "/", newFullPath + "/");
+          VFS.files[subNewPath] = VFS.files[k];
+          delete VFS.files[k];
+        }
+      });
+
+      refreshAllFileManagers();
+      renderDesktopIcons();
+    }
+
+
+    /* ==================== 9. INTEGRATED RUNNER & EDITORS ==================== */
+    
+    // ダブルクリック時に自動判別
+    function handleFileDoubleClick(filePath) {
+      if (filePath.endsWith(".html")) {
+        runVirtualHtml(filePath);
+      } else if (filePath.endsWith(".txt") || filePath.endsWith(".js") || filePath.endsWith(".css") || filePath.endsWith(".json")) {
+        openTextEditor(filePath);
+      } else {
+        // デフォルトではテキストエディタで強制表示
+        openTextEditor(filePath);
+      }
+    }
+
+    // エディタを起動
+    function openTextEditor(filePath) {
+      const fileData = VFS.files[filePath];
+      if (!fileData) return;
+
+      editingFilePath = filePath;
+      document.getElementById("editor-filename").innerText = filePath;
+      document.getElementById("editor-textarea").value = fileData.content;
+      document.getElementById("editor-modal").classList.remove("hidden");
+    }
+
+    function saveAndCloseEditor() {
+      if (editingFilePath) {
+        const textValue = document.getElementById("editor-textarea").value;
+        VFS.files[editingFilePath].content = textValue;
+        VFS.files[editingFilePath].size = textValue.length;
+        
+        // ファイルマネージャーなどを同期
+        refreshAllFileManagers();
+        renderDesktopIcons();
+        closeEditor();
+      }
+    }
+
+    function closeEditor() {
+      document.getElementById("editor-modal").classList.add("hidden");
+      editingFilePath = "";
+    }
+
+    // 隔離（サンドボックス）環境下での仮想HTMLの実行。
+    // 仮想ドライブ内のアセットや他ファイルへのローカル参照をサポートします。
+    function runVirtualHtml(filePath) {
+      const fileObj = VFS.files[filePath];
+      if (!fileObj || fileObj.type !== 'file') return;
+
+      document.getElementById("runner-title").innerText = filePath.split('/').pop();
+      document.getElementById("runner-virtual-path").innerText = `vfs://${filePath}`;
+
+      let rawContent = fileObj.content;
+
+      // HTMLコンテンツの内部解決処理
+      // 例：<link href="style.css" ...> や <script src="script.js"> などのローカルアセットを検出し
+      // VFSに存在する該当データとインライン置換、またはBlob URL変換して完全実行可能にします。
+      const parentDir = filePath.substring(0, filePath.lastIndexOf('/')) || "/";
+
+      // 1. CSSのインライン置換 (簡易パーサー)
+      const cssLinkRegex = /<link\s+[^>]*href=["']([^"']+)["'][^>]*>/gi;
+      rawContent = rawContent.replace(cssLinkRegex, (match, p1) => {
+        if (!p1.startsWith("http") && !p1.startsWith("data:")) {
+          const absoluteCssPath = resolvePath(parentDir, p1);
+          if (VFS.files[absoluteCssPath]) {
+            return `<style>${VFS.files[absoluteCssPath].content}</style>`;
+          }
+        }
+        return match;
+      });
+
+      // 2. JSのインライン置換 (簡易パーサー)
+      const jsScriptRegex = /<script\s+[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi;
+      rawContent = rawContent.replace(jsScriptRegex, (match, p1) => {
+        if (!p1.startsWith("http") && !p1.startsWith("data:")) {
+          const absoluteJsPath = resolvePath(parentDir, p1);
+          if (VFS.files[absoluteJsPath]) {
+            return `<script>${VFS.files[absoluteJsPath].content}<\/script>`;
+          }
+        }
+        return match;
+      });
+
+      // 3. ImageタグのローカルソースをBase64またはBlobでマッピング
+      const imgRegex = /<img\s+[^>]*src=["']([^"']+)["'][^>]*>/gi;
+      rawContent = rawContent.replace(imgRegex, (match, p1) => {
+        if (!p1.startsWith("http") && !p1.startsWith("data:")) {
+          const absoluteImgPath = resolvePath(parentDir, p1);
+          if (VFS.files[absoluteImgPath]) {
+            const rawImg = VFS.files[absoluteImgPath];
+            // Base64であればそのまま流用、プレーンテキストならBlob変換
+            return match.replace(p1, rawImg.content);
+          }
+        }
+        return match;
+      });
+
+      // 安全な iframe 表示用 Blob の構築
+      const blob = new Blob([rawContent], { type: "text/html" });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const iframe = document.getElementById("html-runner-iframe");
+      iframe.src = blobUrl;
+
+      document.getElementById("html-runner-modal").classList.remove("hidden");
+    }
+
+    function closeHtmlRunner() {
+      document.getElementById("html-runner-modal").classList.add("hidden");
+      const iframe = document.getElementById("html-runner-iframe");
+      iframe.src = "about:blank"; // リソースを解放
+    }
+
+
+    /* ==================== 10. EXTERNAL IMPORTER (sudo import) ==================== */
+    
+    // 外部URLのJSまたはHTMLの仮想OSへの取り込み
+    async function importExternalScript(url, terminalId) {
+      const output = document.getElementById(`term-output-${terminalId}`);
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTPエラー! ステータス: ${response.status}`);
+        }
+        const textData = await response.text();
+        const filename = url.substring(url.lastIndexOf('/') + 1) || "imported_script.js";
+        
+        // 保存先パス
+        const savePath = `/home/${currentUser}/Downloads/${filename}`;
+        
+        VFS.files[savePath] = {
+          type: "file",
+          content: textData,
+          size: textData.length,
+          mime: filename.endsWith(".html") ? "text/html" : "application/javascript"
+        };
+
+        output.innerHTML += `<div class="text-green-400">成功: "${filename}" をダウンロードし、~/Downloads に保存しました。</div>`;
+        refreshAllFileManagers();
+        renderDesktopIcons();
+
+      } catch (err) {
+        output.innerHTML += `<div class="text-red-400">インポートに失敗しました: ${err.message}</div>`;
+      }
+    }
+
+
+    /* ==================== 11. FILE UPLOAD HANDLER ==================== */
+
+    // 実機ファイルからドラッグドロップ、またはセレクト経由でVFS of Downloadsフォルダに取り込む
+    function uploadRealFiles(event, winId) {
+      const files = event.target.files;
+      if (!files.length) return;
+
+      const logEl = document.getElementById(`uploader-log-${winId}`);
+      logEl.innerHTML = "";
+
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        
+        // テキストやコードはテキストモード、その他画像等はデータURL形式でロード
+        const isBinary = !file.type.startsWith("text/") && !file.name.endsWith(".js") && !file.name.endsWith(".css") && !file.name.endsWith(".json");
+        
+        reader.onload = function(evt) {
+          const fileContent = evt.target.result;
+          const targetPath = `/home/${currentUser}/Downloads/${file.name}`;
+          
+          VFS.files[targetPath] = {
+            type: "file",
+            content: fileContent,
+            size: fileContent.length,
+            mime: file.type || "application/octet-stream"
+          };
+
+          logEl.innerHTML += `<div class="text-green-400">成功: ${file.name} (${file.size} bytes) -> Downloads/</div>`;
+          refreshAllFileManagers();
+          renderDesktopIcons();
+        };
+
+        if (isBinary) {
+          reader.readAsDataURL(file); // 画像等はBase64 URIでVFSに格納
+        } else {
+          reader.readAsText(file);
+        }
+      });
+    }
+
+    // デスクトップ上にファイルが直接ドラッグ＆ドロップされた場合、自動でデスクトップ階層に配置
+    function handleDesktopFileDrop(event) {
+      event.preventDefault();
+      const files = event.dataTransfer.files;
+      if (!files.length) return;
+
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        const isBinary = !file.type.startsWith("text/") && !file.name.endsWith(".js") && !file.name.endsWith(".css") && !file.name.endsWith(".json");
+
+        reader.onload = function(evt) {
+          const fileContent = evt.target.result;
+          const targetPath = `/home/${currentUser}/Desktop/${file.name}`;
+
+          VFS.files[targetPath] = {
+            type: "file",
+            content: fileContent,
+            size: fileContent.length,
+            mime: file.type || "application/octet-stream"
+          };
+
+          refreshAllFileManagers();
+          renderDesktopIcons();
+        };
+
+        if (isBinary) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      });
+    }
+
+    // ファイルマネージャ上に直接ドロップされた場合のハンドラー
+    function handleFileManagerDrop(event, winId) {
+      event.preventDefault();
+      const displayEl = document.getElementById(`files-path-display-${winId}`);
+      const curPath = displayEl.getAttribute("data-current-path") || `/home/${currentUser}`;
+
+      const files = event.dataTransfer.files;
+      if (!files.length) return;
+
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        const isBinary = !file.type.startsWith("text/") && !file.name.endsWith(".js") && !file.name.endsWith(".css") && !file.name.endsWith(".json");
+
+        reader.onload = function(evt) {
+          const fileContent = evt.target.result;
+          const targetPath = resolvePath(curPath, file.name);
+
+          VFS.files[targetPath] = {
+            type: "file",
+            content: fileContent,
+            size: fileContent.length,
+            mime: file.type || "application/octet-stream"
+          };
+
+          refreshAllFileManagers();
+          renderDesktopIcons();
+        };
+
+        if (isBinary) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      });
+    }
+
+
+    /* ==================== 12. UTILITY & SETTING ACTIONS ==================== */
+
+    // パス解決ヘルパー
+    function resolvePath(current, relative) {
+      if (relative.startsWith("/")) {
+        return cleanPath(relative);
+      }
+      const combined = current + "/" + relative;
+      return cleanPath(combined);
+    }
+
+    // /../ などの不要なセグメントを除去
+    function cleanPath(path) {
+      const parts = path.split("/");
+      const stack = [];
+      for (let part of parts) {
+        if (part === "." || part === "") continue;
+        if (part === "..") {
+          if (stack.length > 0) stack.pop();
+        } else {
+          stack.push(part);
+        }
+      }
+      return "/" + stack.join("/");
+    }
+
+    // ユーザー名表示等の置換
+    function getPrettyPath(path) {
+      const homePrefix = `/home/${currentUser}`;
+      if (path === homePrefix) return "~";
+      if (path.startsWith(homePrefix + "/")) {
+        return path.replace(homePrefix, "~");
+      }
+      return path;
+    }
+
+    // 特定フォルダ直下の子オブジェクトを全スキャン
+    function getDirectoryChildren(parentPath) {
+      const parentWithSlash = parentPath === "/" ? "/" : parentPath + "/";
+      const keys = Object.keys(VFS.files);
+      const results = [];
+
+      keys.forEach(k => {
+        if (k.startsWith(parentWithSlash) && k !== parentPath) {
+          // 直下の階層か判定
+          const subPath = k.substring(parentWithSlash.length);
+          if (!subPath.includes("/")) {
+            results.push({
+              name: subPath,
+              path: k,
+              info: VFS.files[k]
+            });
+          }
+        }
+      });
+      return results;
+    }
+
+    // カスタムアラート
+    function customAlert(msg) {
+      const div = document.createElement("div");
+      div.className = "absolute top-4 left-1/2 -translate-x-1/2 bg-[#dfdbd2] text-black border-l-4 border-[#e95420] p-4 rounded shadow-2xl text-xs z-[150] transition-all duration-300 transform -translate-y-4 opacity-0 flex items-center justify-between min-w-[320px]";
+      div.innerHTML = `
+        <div class="flex items-center">
+          <i class="lucide-alert-triangle w-4 h-4 text-[#e95420] mr-2 shrink-0"></i>
+          <span>${msg}</span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-neutral-500 hover:text-black font-bold ml-4">✕</button>
+      `;
+      document.body.appendChild(div);
+      setTimeout(() => {
+        div.classList.remove("opacity-0", "-translate-y-4");
+      }, 50);
+
+      // 5秒後に自動消滅
+      setTimeout(() => {
+        div.classList.add("opacity-0", "-translate-y-4");
+        setTimeout(() => div.remove(), 300);
+      }, 5000);
+    }
+
+    // システム終了（ダウンロード＆シャットダウン）
+    function systemShutdown() {
+      // データのローカル保存を実行
+      exportVfsToDiskFile();
+      
+      // UI上も電源切断表示にする
+      document.getElementById("desktop-env").classList.add("hidden");
+      const boot = document.getElementById("boot-screen");
+      boot.classList.remove("opacity-0", "pointer-events-none");
+      document.getElementById("boot-options").classList.remove("hidden");
+      document.getElementById("boot-loading").classList.add("hidden");
+      cancelBootStep();
+      customAlert("仮想ディスクのエクスポートが正常に完了しました。シャットダウン完了。");
+    }
+
+    // 設定ウィンドウ用の描画
+    function initSettingsPanel() {
+      document.getElementById("settings-bg-input").value = VFS.settings.bgImage || "";
+      document.getElementById("settings-cursor").value = VFS.settings.cursor || "default";
+
+      // VFSサイズをざっくり算出
+      const totalBytes = Object.keys(VFS.files).reduce((acc, curr) => {
+        return acc + (VFS.files[curr].size || 0);
+      }, 0);
+
+      const mb = (totalBytes / (1024 * 1024)).toFixed(2);
+      document.getElementById("settings-disk-usage").innerText = `使用済み容量: ${mb} MiB (${totalBytes.toLocaleString()} bytes)`;
+    }
+
+    // テーマ設定
+    function setThemeBgColor(color) {
+      VFS.settings.themeColor = color;
+      VFS.settings.bgImage = ""; // 単色カラー時は画像指定をリセット
+      applySystemSettings();
+      initSettingsPanel();
+    }
+
+    // 背景画像変更
+    function saveBgPath() {
+      const pathInput = document.getElementById("settings-bg-input").value.trim();
+      VFS.settings.bgImage = pathInput;
+      applySystemSettings();
+      initSettingsPanel();
+    }
+
+    // カーソル設定
+    function setSystemCursor(cursorStyle) {
+      VFS.settings.cursor = cursorStyle;
+      applySystemSettings();
+    }
+
+    // HTMLエスケープ
+    function escapeHtml(string) {
+      if(typeof string !== 'string') return '';
+      return string.replace(/&/g, '&amp;')
+                   .replace(/</g, '&lt;')
+                   .replace(/>/g, '&gt;')
+                   .replace(/"/g, '&quot;')
+                   .replace(/'/g, '&#039;');
+    }
+
+    // アクティビティボタン
+    function toggleActivities() {
+      customAlert("Ubuntu アクティビティオーバービュー(モック): 左のランナードックから、全ての仮想アプリを切り替え可能です。");
+    }
+
+    function openSystemSettings() {
+      openApp("settings");
+    }
+  </script>
+</body>
+</html>
