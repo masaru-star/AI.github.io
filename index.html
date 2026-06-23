@@ -26,15 +26,13 @@
     <!-- サイドパネル（情報UI） -->
     <div class="w-80 min-w-[260px] max-w-[55vw] resize-x overflow-auto flex flex-col border-r border-slate-700 bg-slate-800 shadow-xl z-10 flex-shrink-0">
         <!-- ヘッダー -->
-        <div class="p-4 border-b border-slate-700 bg-slate-900 flex justify-between items-center gap-2">
+        <div class="p-4 border-b border-slate-700 bg-slate-900 flex justify-between items-center gap-2 flex-wrap">
             <h1 class="text-xl font-bold text-amber-500 tracking-wider">文明の軌跡</h1>
-            <div class="flex items-center gap-2">
-                <button id="btnFound" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded text-sm font-bold shadow cursor-pointer transition duration-200">
-                    建国
-                </button>
-                <button id="btnToggle" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded text-sm font-bold shadow cursor-pointer transition duration-200">
-                    再開
-                </button>
+            <div class="flex items-center gap-1.5 w-full justify-end mt-2">
+                <button id="btnSave" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1.5 rounded text-xs font-bold shadow transition duration-200">セーブ</button>
+                <button id="btnLoad" class="bg-yellow-600 hover:bg-yellow-500 text-white px-2 py-1.5 rounded text-xs font-bold shadow transition duration-200">ロード</button>
+                <button id="btnFound" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded text-xs font-bold shadow transition duration-200">建国</button>
+                <button id="btnToggle" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-bold shadow transition duration-200">再開</button>
             </div>
         </div>
         
@@ -49,6 +47,7 @@
                 <span class="text-slate-400">現存する国家数:</span> 
                 <span id="uiCivCount" class="font-mono text-lg text-blue-400">0</span>
             </div>
+            <div class="text-xs text-center mt-1 text-slate-400" id="uiPolicy">現在の方針: 未定</div>
         </div>
 
         <!-- 選択セルの詳細情報 -->
@@ -75,12 +74,11 @@
 
     <!-- メインマップエリア -->
     <div class="flex-1 relative bg-black" id="mapContainer">
-        <!-- ピクセルデータ操作用のオフスクリーンキャンバス -->
         <canvas id="bgCanvas" style="display:none;"></canvas>
-        <!-- ユーザーに見せるメインキャンバス -->
         <canvas id="uiCanvas" class="absolute inset-0 cursor-crosshair w-full h-full"></canvas>
     </div>
 
+    <!-- 建国モーダル -->
     <div id="foundModal" class="hidden fixed inset-0 z-20 bg-black/70 items-center justify-center p-4">
         <div class="w-full max-w-lg rounded-lg border border-slate-600 bg-slate-900 p-5 shadow-2xl">
             <h2 class="text-lg font-bold text-indigo-300 mb-4">建国</h2>
@@ -88,11 +86,11 @@
             <form id="foundForm" class="space-y-3">
                 <div>
                     <label class="text-xs text-slate-400">国家名</label>
-                    <input id="foundName" required maxlength="20" class="w-full mt-1 rounded bg-slate-800 border border-slate-600 px-3 py-2 text-sm" placeholder="例: 新アルトリア連邦">
+                    <input id="foundName" required maxlength="20" class="w-full mt-1 rounded bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white" placeholder="例: 新アルトリア連邦">
                 </div>
                 <div>
                     <label class="text-xs text-slate-400">イデオロギー</label>
-                    <select id="foundIdeology" class="w-full mt-1 rounded bg-slate-800 border border-slate-600 px-3 py-2 text-sm">
+                    <select id="foundIdeology" class="w-full mt-1 rounded bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white">
                         <option>民主主義</option><option>王政</option><option>神権</option><option>軍国主義</option><option>連邦主義</option>
                     </select>
                 </div>
@@ -101,6 +99,69 @@
                     <button type="submit" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-sm font-bold">建国する</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- 汎用アラートモーダル -->
+    <div id="alertModal" class="hidden fixed inset-0 z-[60] bg-black/70 items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-lg border border-slate-600 bg-slate-900 p-5 shadow-2xl text-center">
+            <p id="alertMessage" class="text-sm text-slate-200 mb-5 whitespace-pre-wrap leading-relaxed"></p>
+            <button id="btnAlertClose" class="px-6 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white">OK</button>
+        </div>
+    </div>
+
+    <!-- 国家運営イベント・要請モーダル -->
+    <div id="requestModal" class="hidden fixed inset-0 z-50 bg-black/80 items-center justify-center p-4 backdrop-blur-sm">
+        <div class="w-full max-w-md rounded-lg border-2 border-amber-500/50 bg-slate-900 p-6 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+            <h2 id="reqModalTitle" class="text-xl font-bold text-amber-400 mb-4 flex items-center gap-2">
+                <span>⚠️</span> 国家運営イベント
+            </h2>
+            <p id="reqModalMessage" class="text-sm text-slate-200 mb-6 whitespace-pre-wrap leading-relaxed bg-slate-800 p-3 rounded"></p>
+            <div class="flex justify-end gap-3">
+                <button id="reqModalReject" class="px-4 py-2 rounded bg-rose-700 hover:bg-rose-600 text-sm font-bold transition text-white">却下する</button>
+                <button id="reqModalAccept" class="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-sm font-bold transition text-white">受理する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 方針決定モーダル -->
+    <div id="policyModal" class="hidden fixed inset-0 z-50 bg-black/80 items-center justify-center p-4 backdrop-blur-sm">
+        <div class="w-full max-w-md rounded-lg border-2 border-indigo-500/50 bg-slate-900 p-6 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+            <h2 class="text-xl font-bold text-indigo-400 mb-2 flex items-center gap-2">
+                <span>🏛️</span> 国家方針の決定
+            </h2>
+            <p class="text-sm text-slate-200 mb-5">これからの10年間の国家方針を決定してください。</p>
+            <div class="flex flex-col gap-3">
+                <button onclick="setPolicy('military')" class="p-3 text-left rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 transition">
+                    <div class="font-bold text-rose-400 text-sm">⚔️ 軍事と領土面の拡大</div>
+                    <div class="text-xs text-slate-400 mt-1">軍事力の増加率UP / 未開の地への占領スピード大幅UP</div>
+                </button>
+                <button onclick="setPolicy('domestic')" class="p-3 text-left rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 transition">
+                    <div class="font-bold text-emerald-400 text-sm">🌾 内政に注力</div>
+                    <div class="text-xs text-slate-400 mt-1">人口増加率UP / 支持率の自然低下を抑制</div>
+                </button>
+                <button onclick="setPolicy('economy')" class="p-3 text-left rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 transition">
+                    <div class="font-bold text-amber-400 text-sm">💰 経済発展</div>
+                    <div class="text-xs text-slate-400 mt-1">国庫収入・資源獲得量がUP</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- セーブ/ロードモーダル -->
+    <div id="saveLoadModal" class="hidden fixed inset-0 z-50 bg-black/70 items-center justify-center p-4">
+        <div class="w-full max-w-2xl rounded-lg border border-slate-600 bg-slate-900 p-5 shadow-2xl flex flex-col h-[70vh]">
+            <h2 id="slModalTitle" class="text-lg font-bold text-slate-200 mb-2">データ管理</h2>
+            <p class="text-xs text-slate-400 mb-3">テキストデータをコピーして保存、または貼り付けてロードしてください。</p>
+            <textarea id="slModalTextarea" class="flex-1 w-full rounded bg-slate-800 border border-slate-600 p-3 text-xs font-mono text-slate-300 resize-none focus:outline-none focus:border-indigo-500"></textarea>
+            
+            <div class="flex justify-between items-center mt-4">
+                <button id="slModalClose" class="px-4 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm">閉じる</button>
+                <div class="flex gap-2">
+                    <button id="slModalCopy" class="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-sm font-bold hidden text-white">コピーする</button>
+                    <button id="slModalAction" class="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-sm font-bold hidden text-white">ロード実行</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -122,10 +183,16 @@
         let pauseLockReason = null;
         let playerCivId = null;
         let hasFoundedNation = false;
+        let currentPolicy = null;
+        
         let pendingRequests = [];
+        let requestQueue = [];
+        let isRequestModalOpen = false;
         let requestIdCounter = 1;
+        
         let activeTab = 'ranking';
         let blinkingDemandTiles = [];
+        let frameCounter = 0;
 
         let bgCanvas, bgCtx, bgImgData;
         let uiCanvas, uiCtx;
@@ -189,6 +256,17 @@
         function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
         function weightedLeaderStat() { return 20 + Math.floor(80 * Math.pow(Math.random(), 2.3)); }
         function getPlayerCiv() { return civs.find(c => c.id === playerCivId && c.isAlive) || null; }
+
+        function showAlert(message) {
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
+        }
+
+        document.getElementById('btnAlertClose').addEventListener('click', () => {
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
+        });
 
         function getYearMonth() {
             const year = 1 + Math.floor(monthCount / 12);
@@ -400,7 +478,9 @@
             logEvent(`🔥 【反乱発生】${civ.name}で内戦！都市「${rebelCity.name}」が${rebelCiv.name}として独立宣言。`);
             if (civ.id === playerCivId) {
                 declareWar(rebelCiv, civ, true);
-                pendingRequests.push({ id: requestIdCounter++, type:'war', fromId: rebelCiv.id, toId: civ.id, status:'ongoing', source:'revolt' });
+                const req = { id: requestIdCounter++, type:'war', fromId: rebelCiv.id, toId: civ.id, status:'ongoing', source:'revolt' };
+                pendingRequests.push(req);
+                enqueueRequestAlert(req);
             }
 
             const frontier = [[rebelCity.x, rebelCity.y]];
@@ -454,7 +534,11 @@
 
                 if (target.civId === null) {
                     claimCell(nx, ny, civ);
-                    civ.expansionPoints -= 1;
+                    let cost = 0.8; // 全体的に未開の地の占領スピードを少し早く
+                    if (civ.id === playerCivId && currentPolicy === 'military') {
+                        cost = 0.4; // 軍事方針の時はさらに消費を下げる（拡大しやすくする）
+                    }
+                    civ.expansionPoints -= cost;
                 } else {
                     let enemy = civs.find(c => c.id === target.civId);
                     if (!enemy) continue;
@@ -776,6 +860,12 @@
             let totalPop = aliveCivs.reduce((sum, civ) => sum + civ.population, 0);
             document.getElementById('uiTotalPop').textContent = Math.floor(totalPop).toLocaleString();
             document.getElementById('uiCivCount').textContent = aliveCivs.length;
+            
+            let policyText = '未定';
+            if (currentPolicy === 'military') policyText = '軍事と領土面の拡大';
+            if (currentPolicy === 'domestic') policyText = '内政に注力';
+            if (currentPolicy === 'economy') policyText = '経済発展';
+            document.getElementById('uiPolicy').textContent = `現在の方針: ${policyText}`;
 
             aliveCivs.sort((a, b) => b.territory.size - a.territory.size);
             let rankingHtml = '';
@@ -790,7 +880,7 @@
 
             let logHtml = '';
             [...logs].reverse().forEach(log => {
-                let isMajor = /建国|滅亡|反乱|同盟|通商/.test(log);
+                let isMajor = /建国|滅亡|反乱|同盟|通商|方針決定/.test(log);
                 let colorClass = isMajor ? 'text-amber-300 font-bold' : 'text-slate-300';
                 logHtml += `<div class="border-l-2 ${isMajor ? 'border-amber-500' : 'border-slate-600'} pl-3 py-1.5 ${colorClass}">${log}</div>`;
             });
@@ -828,9 +918,6 @@
             fromCiv.wars.add(toCiv.id);
             toCiv.wars.add(fromCiv.id);
             logEvent(`⚔️ ${fromCiv.name}が${toCiv.name}へ宣戦布告。`);
-            if (!viaRequest && toCiv.id === playerCivId) {
-                pendingRequests.push({ id: requestIdCounter++, type:'war', fromId: fromCiv.id, toId: toCiv.id, status:'pending' });
-            }
         }
 
         function endWar(a, b) {
@@ -848,18 +935,101 @@
             civ.military = Math.max(5, civ.military + sign * (12 + civ.leader.military * 0.4));
         }
 
+        // --- 要請・イベントのキュー処理機構 ---
+        function enqueueRequestAlert(req) {
+            requestQueue.push(req);
+            if (!isRequestModalOpen) {
+                processNextRequest();
+            }
+        }
+
+        function processNextRequest() {
+            if (requestQueue.length === 0) {
+                isRequestModalOpen = false;
+                return;
+            }
+            isRequestModalOpen = true;
+            setPauseState(true); // 時間を止める
+            
+            const req = requestQueue.shift();
+            const player = getPlayerCiv();
+            const from = civs.find(c => c.id === req.fromId);
+            const name = from ? from.name : '不明国家';
+            const labelMap = { alliance:'同盟の提案', nap:'不可侵条約の提案', war:'宣戦布告', cession:'領土割譲要求', demilitarize:'軍縮条約の要求', joinwar:'参戦要請' };
+            
+            let msg = `${name} から ${labelMap[req.type] || req.type} が届いています。`;
+            if (req.type === 'cession') msg += '\n※要求に応じなければ、関係が悪化し戦争に発展する恐れがあります。';
+            if (req.type === 'war') msg = `${name} が我が国に宣戦布告を行いました！`;
+            if (req.type === 'joinwar') {
+                const target = civs.find(c => c.id === req.targetId);
+                if (target) msg += `\n目標: ${target.name}への攻撃`;
+            }
+            
+            // 国力比較情報の追加
+            if (from && player) {
+                const estMil = Math.floor(from.military * (1 + from.intelBias.military / 100));
+                const estPop = Math.floor(from.population * (1 + from.intelBias.population / 100));
+                const estTreasury = Math.floor(from.treasury * (1 + from.intelBias.treasury / 100));
+                let comparison = `\n\n📊 【国力比較】(自国 vs ${name})\n` +
+                             `・軍事力: ${Math.floor(player.military).toLocaleString()} vs ${estMil.toLocaleString()}(推定)\n` +
+                             `・領土数: ${player.territory.size} vs ${from.territory.size}\n` +
+                             `・総人口: ${Math.floor(player.population).toLocaleString()} vs ${estPop.toLocaleString()}(推定)\n` +
+                             `・資金力: ${Math.floor(player.treasury).toLocaleString()} vs ${estTreasury.toLocaleString()}(推定)`;
+                msg += comparison;
+            }
+
+            const onlyAccept = req.type === 'cession' && req.forced;
+
+            document.getElementById('reqModalMessage').innerText = msg;
+            
+            const btnAccept = document.getElementById('reqModalAccept');
+            const btnReject = document.getElementById('reqModalReject');
+            
+            btnAccept.textContent = req.type === 'war' ? '応戦する' : '受理する';
+            btnReject.textContent = req.type === 'war' ? '降伏する' : '却下する';
+            
+            btnReject.disabled = onlyAccept;
+            btnReject.className = onlyAccept 
+                ? 'px-4 py-2 rounded bg-rose-700 opacity-40 cursor-not-allowed text-white' 
+                : 'px-4 py-2 rounded bg-rose-700 hover:bg-rose-600 text-white font-bold transition';
+
+            btnAccept.onclick = () => {
+                resolveRequest(req.id, 'accept');
+                closeRequestModal();
+            };
+            btnReject.onclick = () => {
+                resolveRequest(req.id, 'reject');
+                closeRequestModal();
+            };
+            
+            document.getElementById('requestModal').classList.remove('hidden');
+            document.getElementById('requestModal').classList.add('flex');
+        }
+
+        function closeRequestModal() {
+            document.getElementById('requestModal').classList.add('hidden');
+            document.getElementById('requestModal').classList.remove('flex');
+            processNextRequest();
+        }
+
         function generatePlayerRequests() {
             const player = getPlayerCiv();
             if (!player) return;
             const others = civs.filter(c => c.isAlive && c.id !== player.id);
             if (!others.length) return;
+            
             if (Math.random() < 0.012) {
                 const from = pick(others);
-                pendingRequests.push({ id: requestIdCounter++, type: Math.random() < 0.5 ? 'alliance' : 'nap', fromId: from.id, toId: player.id, status:'pending' });
+                const req = { id: requestIdCounter++, type: Math.random() < 0.5 ? 'alliance' : 'nap', fromId: from.id, toId: player.id, status:'pending' };
+                pendingRequests.push(req);
+                enqueueRequestAlert(req);
             }
             if (Math.random() < 0.01) {
                 const enemy = pick(others);
                 declareWar(enemy, player, true);
+                const req = { id: requestIdCounter++, type:'war', fromId: enemy.id, toId: player.id, status:'pending' };
+                pendingRequests.push(req);
+                enqueueRequestAlert(req);
             }
             if (Math.random() < 0.009) {
                 const from = pick(others);
@@ -874,17 +1044,27 @@
                     }
                     if (demanded.length >= sizeBase + Math.floor(Math.random()*4)) break;
                 }
-                if (demanded.length) pendingRequests.push({ id: requestIdCounter++, type:'cession', fromId: from.id, toId: player.id, demandedTiles: demanded, forced: false, status:'pending' });
+                if (demanded.length) {
+                    const req = { id: requestIdCounter++, type:'cession', fromId: from.id, toId: player.id, demandedTiles: demanded, forced: false, status:'pending' };
+                    pendingRequests.push(req);
+                    enqueueRequestAlert(req);
+                }
             }
             if (Math.random() < 0.008) {
                 const from = pick(others);
-                pendingRequests.push({ id: requestIdCounter++, type:'demilitarize', fromId: from.id, toId: player.id, signers:[from.id], status:'pending' });
+                const req = { id: requestIdCounter++, type:'demilitarize', fromId: from.id, toId: player.id, signers:[from.id], status:'pending' };
+                pendingRequests.push(req);
+                enqueueRequestAlert(req);
             }
             if (Math.random() < 0.007) {
                 const ally = others.find(c => player.alliances.has(c.id));
                 if (ally) {
                     const target = others.find(c => c.id !== ally.id && areAdjacentOrSeaLinked(player, c));
-                    if (target) pendingRequests.push({ id: requestIdCounter++, type:'joinwar', fromId: ally.id, targetId: target.id, toId: player.id, status:'pending' });
+                    if (target) {
+                        const req = { id: requestIdCounter++, type:'joinwar', fromId: ally.id, targetId: target.id, toId: player.id, status:'pending' };
+                        pendingRequests.push(req);
+                        enqueueRequestAlert(req);
+                    }
                 }
             }
         }
@@ -912,21 +1092,29 @@
                     <div class="font-bold text-base" style="color: rgb(${civ.color.r},${civ.color.g},${civ.color.b})">${civ.name}</div></div>
                     <div class="grid grid-cols-2 gap-1 text-xs bg-slate-800/80 p-2 rounded">
                         <div>人口(推定): ${Math.max(1, estPop).toLocaleString()}</div><div>領土: ${civ.territory.size}</div>
-                        <div>技術力: ${civ.tech.toFixed(2)}</div><div>軍事力(推定): ${estMilitary}</div>
+                        <div>技術力: ${civ.tech.toFixed(2)}</div><div>軍事力(推定): ${estMilitary.toLocaleString()}</div>
                         <div>イデオロギー: ${civ.ideology}</div><div>支持率(推定): ${estSupport.toFixed(1)}%</div>
-                        <div>資源貯蓄: ${Math.floor(civ.resourceStock)}</div><div>国庫(推定): ${estTreasury}</div>
+                        <div>資源貯蓄: ${Math.floor(civ.resourceStock)}</div><div>国庫(推定): ${estTreasury.toLocaleString()}</div>
                         <div class="col-span-2 text-indigo-300">指導者: 政治${civ.leader.politics}/財政${civ.leader.finance}/軍事${civ.leader.military}/外交${civ.leader.diplomacy}（誤差±${civ.intelError}）</div>
                         <div>同盟: ${relationNames(civ,civ.alliances)}</div><div>不可侵: ${relationNames(civ,civ.nonAggressionPacts)}</div>
                         <div class="col-span-2">通商禁止: ${relationNames(civ,civ.embargoes)}</div>
                     </div>`;
+                    
                     const player = getPlayerCiv();
                     if (player && !isPlayer) {
+                        const isAlly = player.alliances.has(civ.id);
+                        const isNap = player.nonAggressionPacts.has(civ.id);
+                        const isEmbargo = player.embargoes.has(civ.id);
+                        const isWar = areAtWar(player, civ);
                         const canWar = areAdjacentOrSeaLinked(player, civ);
+
+                        const btnAlly = `<button onclick="issueDiplomacy(${civ.id},'alliance')" ${isAlly || isWar ? 'disabled' : ''} class="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 px-2 py-1 rounded text-white">${isAlly ? '同盟済' : '同盟提案'}</button>`;
+                        const btnNap = `<button onclick="issueDiplomacy(${civ.id},'nap')" ${isNap || isWar ? 'disabled' : ''} class="bg-sky-700 hover:bg-sky-600 disabled:opacity-40 px-2 py-1 rounded text-white">${isNap ? '不可侵済' : '不可侵提案'}</button>`;
+                        const btnEmbargo = `<button onclick="issueDiplomacy(${civ.id},'embargo')" ${isEmbargo ? 'disabled' : ''} class="bg-orange-700 hover:bg-orange-600 disabled:opacity-40 px-2 py-1 rounded text-white">${isEmbargo ? '通商禁止中' : '通商禁止'}</button>`;
+                        const btnWar = `<button onclick="issueDiplomacy(${civ.id},'war')" ${(!canWar && !isWar) || isAlly ? 'disabled' : ''} class="bg-rose-700 hover:bg-rose-600 disabled:opacity-40 px-2 py-1 rounded text-white">${isWar ? (player.canAdvanceWars ? '進軍停止' : '進軍再開') : '宣戦布告'}</button>`;
+
                         content += `<div class="grid grid-cols-2 gap-2 mt-2 text-xs">
-                            <button onclick="issueDiplomacy(${civ.id},'alliance')" class="bg-emerald-700 hover:bg-emerald-600 px-2 py-1 rounded">同盟提案</button>
-                            <button onclick="issueDiplomacy(${civ.id},'nap')" class="bg-sky-700 hover:bg-sky-600 px-2 py-1 rounded">不可侵提案</button>
-                            <button onclick="issueDiplomacy(${civ.id},'embargo')" class="bg-orange-700 hover:bg-orange-600 px-2 py-1 rounded">通商禁止</button>
-                            <button onclick="issueDiplomacy(${civ.id},'war')" ${canWar ? '' : 'disabled'} class="bg-rose-700 hover:bg-rose-600 disabled:opacity-40 px-2 py-1 rounded">${areAtWar(player,civ)?'進軍停止':'宣戦布告'}</button>
+                            ${btnAlly} ${btnNap} ${btnEmbargo} ${btnWar}
                         </div>`;
                     }
                 }
@@ -936,25 +1124,42 @@
             selectionDiv.innerHTML = content;
         }
 
+        // --- 外交アクションと確率判定 ---
         function issueDiplomacy(targetId, action) {
             const player = getPlayerCiv();
             const target = civs.find(c => c.id === targetId && c.isAlive);
             if (!player || !target) return;
+            
             if (action === 'alliance') {
-                player.alliances.add(target.id); target.alliances.add(player.id);
-                logEvent(`🤝 ${player.name}が${target.name}と同盟。`);
+                const prob = 0.3 + (player.leader.diplomacy - target.leader.diplomacy) * 0.005 + (target.ideology === player.ideology ? 0.2 : 0);
+                if (Math.random() < prob) {
+                    player.alliances.add(target.id); target.alliances.add(player.id);
+                    logEvent(`🤝 ${player.name}が${target.name}と同盟。`);
+                    showAlert(`【同盟成立】\n${target.name} は同盟の提案を受理しました。`);
+                } else {
+                    showAlert(`【同盟拒否】\n${target.name} は同盟の提案を拒否しました。`);
+                }
             } else if (action === 'nap') {
-                player.nonAggressionPacts.add(target.id); target.nonAggressionPacts.add(player.id);
-                logEvent(`🕊️ ${player.name}が${target.name}と不可侵条約。`);
+                const prob = 0.5 + (player.leader.diplomacy - target.leader.diplomacy) * 0.005 + (target.ideology === player.ideology ? 0.1 : 0);
+                if (Math.random() < prob) {
+                    player.nonAggressionPacts.add(target.id); target.nonAggressionPacts.add(player.id);
+                    logEvent(`🕊️ ${player.name}が${target.name}と不可侵条約。`);
+                    showAlert(`【不可侵条約成立】\n${target.name} は不可侵条約の提案を受理しました。`);
+                } else {
+                    showAlert(`【不可侵条約拒否】\n${target.name} は不可侵条約の提案を拒否しました。`);
+                }
             } else if (action === 'embargo') {
                 player.embargoes.add(target.id); target.embargoes.add(player.id);
                 logEvent(`🚫 ${player.name}が${target.name}へ通商禁止。`);
+                showAlert(`【通商禁止 通告】\n${target.name} に対して通商禁止を通告しました。`);
             } else if (action === 'war') {
                 if (areAtWar(player, target)) {
                     player.canAdvanceWars = !player.canAdvanceWars;
                     logEvent(`🪖 ${player.name}が${player.canAdvanceWars ? '進軍再開' : '進軍停止'}を指示。`);
+                    showAlert(`【作戦変更】\n${target.name} 方面の部隊へ ${player.canAdvanceWars ? '進軍再開' : '進軍停止'} を指示しました。`);
                 } else if (areAdjacentOrSeaLinked(player, target)) {
                     declareWar(player, target);
+                    showAlert(`【宣戦布告】\n${target.name} へ宣戦布告を行いました。作戦を開始します。`);
                 }
             }
             updateUISelection();
@@ -1016,16 +1221,157 @@
                     req.demandedTiles.forEach(t => blinkingDemandTiles.push({ ...t, color: from.color }));
                 }
                 const onlyAccept = req.type === 'cession' && req.forced;
-                const labelMap = { alliance:'同盟要請', nap:'不可侵要請', war:'宣戦布告', cession:'領土割譲要求', demilitarize:'軍縮条約', joinwar:'参戦要請' };
+                const labelMap = { alliance:'同盟要請', nap:'不可侵要請', war:'交戦中', cession:'領土割譲要求', demilitarize:'軍縮条約', joinwar:'参戦要請' };
                 return `<div class="p-2 rounded border border-slate-600 bg-slate-900/80">
                     <div class="font-bold text-amber-300">${labelMap[req.type] || req.type}</div>
                     <div class="text-xs text-slate-300 mt-1">${name}${req.type==='joinwar'?' から参戦要請':''}${req.type==='cession'?'（要求地はマップ上で点滅）':''}</div>
                     <div class="mt-2 flex gap-2">
-                        <button onclick="resolveRequest(${req.id},'accept')" class="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-xs">${req.type==='war' && req.status==='ongoing'?'進軍継続':req.type==='war'?'応戦':'受理'}</button>
-                        <button onclick="resolveRequest(${req.id},'reject')" ${onlyAccept ? 'disabled' : ''} class="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 disabled:opacity-40 text-xs">${req.type==='war'?'降伏':'却下'}</button>
+                        <button onclick="resolveRequest(${req.id},'accept')" class="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-xs text-white">${req.type==='war' && req.status==='ongoing'?'進軍継続':req.type==='war'?'応戦':'受理'}</button>
+                        <button onclick="resolveRequest(${req.id},'reject')" ${onlyAccept ? 'disabled' : ''} class="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 disabled:opacity-40 text-xs text-white">${req.type==='war'?'降伏':'却下'}</button>
                     </div>
                 </div>`;
             }).join('');
+        }
+
+        // --- 方針の表示と適用 ---
+        function openPolicyModal() {
+            setPauseState(true);
+            document.getElementById('policyModal').classList.remove('hidden');
+            document.getElementById('policyModal').classList.add('flex');
+        }
+
+        window.setPolicy = function(policy) {
+            currentPolicy = policy;
+            document.getElementById('policyModal').classList.add('hidden');
+            document.getElementById('policyModal').classList.remove('flex');
+            
+            const pName = policy === 'military' ? '軍事と領土面の拡大' : policy === 'domestic' ? '内政に注力' : '経済発展';
+            logEvent(`🏛️ 【方針決定】今後10年間の国家方針を「${pName}」に定めました。`);
+            
+            if (!isRequestModalOpen && !pauseLockReason) {
+                setPauseState(false);
+            }
+            updateUI();
+        }
+
+        // --- セーブ/ロード機能 ---
+        function openSaveLoadModal(mode) {
+            const modal = document.getElementById('saveLoadModal');
+            const title = document.getElementById('slModalTitle');
+            const textarea = document.getElementById('slModalTextarea');
+            const btnAction = document.getElementById('slModalAction');
+            const btnCopy = document.getElementById('slModalCopy');
+            
+            textarea.value = '';
+            
+            if (mode === 'save') {
+                title.textContent = 'セーブ (データ出力)';
+                btnAction.classList.add('hidden');
+                btnCopy.classList.remove('hidden');
+                textarea.readOnly = true;
+                
+                const mapData = map.map(col => col.map(c => ({ t: c.type, c: c.civId, i: c.cityId, r: Math.round(c.resource*1000)/1000 })));
+                const civsData = civs.map(civ => ({
+                    ...civ,
+                    territory: Array.from(civ.territory),
+                    frontiers: Array.from(civ.frontiers),
+                    alliances: Array.from(civ.alliances),
+                    nonAggressionPacts: Array.from(civ.nonAggressionPacts),
+                    embargoes: Array.from(civ.embargoes),
+                    tradePartners: Array.from(civ.tradePartners),
+                    wars: Array.from(civ.wars),
+                }));
+
+                const saveData = {
+                    map: mapData,
+                    civs: civsData,
+                    monthCount, civIdCounter, cityIdCounter, logs, playerCivId, hasFoundedNation, currentPolicy, activeTradeRoutes, activeShips
+                };
+                textarea.value = JSON.stringify(saveData);
+            } else {
+                title.textContent = 'ロード (データ入力)';
+                btnAction.classList.remove('hidden');
+                btnCopy.classList.add('hidden');
+                textarea.readOnly = false;
+                textarea.placeholder = 'ここにセーブデータの文字列を貼り付けてください。';
+                
+                btnAction.onclick = () => {
+                    if (textarea.value.trim() === '') return;
+                    loadGame(textarea.value);
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                };
+            }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        document.getElementById('slModalCopy').onclick = () => {
+            const textarea = document.getElementById('slModalTextarea');
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showAlert('クリップボードにコピーしました！テキストファイル等に保存してください。');
+            } catch(e) {
+                showAlert('コピーに失敗しました。お手数ですが手動でコピーしてください。');
+            }
+        };
+
+        document.getElementById('slModalClose').onclick = () => {
+            document.getElementById('saveLoadModal').classList.add('hidden');
+            document.getElementById('saveLoadModal').classList.remove('flex');
+        };
+
+        function loadGame(jsonStr) {
+            try {
+                const data = JSON.parse(jsonStr);
+                map = data.map.map(col => col.map(c => ({ type: c.t, civId: c.c, cityId: c.i, resource: c.r })));
+                
+                civs = data.civs.map(cData => {
+                    const civ = new Civilization(cData.id, cData.color, cData.name);
+                    Object.assign(civ, cData);
+                    civ.territory = new Set(cData.territory);
+                    civ.frontiers = new Set(cData.frontiers);
+                    civ.alliances = new Set(cData.alliances);
+                    civ.nonAggressionPacts = new Set(cData.nonAggressionPacts);
+                    civ.embargoes = new Set(cData.embargoes);
+                    civ.tradePartners = new Set(cData.tradePartners);
+                    civ.wars = new Set(cData.wars);
+                    return civ;
+                });
+
+                monthCount = data.monthCount;
+                civIdCounter = data.civIdCounter;
+                cityIdCounter = data.cityIdCounter;
+                logs = data.logs || [];
+                playerCivId = data.playerCivId;
+                hasFoundedNation = data.hasFoundedNation;
+                currentPolicy = data.currentPolicy || null;
+                activeTradeRoutes = data.activeTradeRoutes || [];
+                activeShips = data.activeShips || [];
+
+                pendingRequests = [];
+                requestQueue = [];
+                isRequestModalOpen = false;
+
+                pauseLockReason = null;
+                if (hasFoundedNation) {
+                    const pCiv = civs.find(c => c.id === playerCivId);
+                    if (!pCiv || !pCiv.isAlive) pauseLockReason = 'playerDefeated';
+                    document.getElementById('tabLog').textContent = '国家運営';
+                    document.getElementById('btnFound').disabled = true;
+                    document.getElementById('btnFound').classList.add('opacity-40', 'cursor-not-allowed');
+                }
+
+                setPauseState(true);
+                updateUI();
+                renderMap();
+                showAlert('セーブデータのロードが完了しました。');
+            } catch (e) {
+                console.error(e);
+                showAlert('データの読み込みに失敗しました。フォーマットが正しくない可能性があります。');
+            }
         }
 
         function updateSim() {
@@ -1043,19 +1389,37 @@
                 resourceYield *= 0.85;
 
                 let capacity = civ.territory.size * 540 + civ.cities.length * 4500 + resourceYield * 30;
-                civ.population += (capacity - civ.population) * 0.007;
+                let popGrowth = 0.007;
+                // 内政方針ボーナス
+                if (civ.id === playerCivId && currentPolicy === 'domestic') popGrowth = 0.01;
+                
+                civ.population += (capacity - civ.population) * popGrowth;
                 civ.population = Math.max(civ.population, 80);
 
                 civ.tech += 0.00018 * Math.log10(civ.population + 10);
-                civ.military = civ.population * civ.tech * 0.09 + civ.navy * 12;
+                
+                let milGrowth = 0.09;
+                // 軍事方針ボーナス
+                if (civ.id === playerCivId && currentPolicy === 'military') milGrowth = 0.12;
+                civ.military = civ.population * civ.tech * milGrowth + civ.navy * 12;
 
-                const income = resourceYield * 0.38 + civ.tradePartners.size * 3.5;
+                let incomeMult = 1.0;
+                // 経済方針ボーナス
+                if (civ.id === playerCivId && currentPolicy === 'economy') incomeMult = 1.3;
+
+                const income = (resourceYield * 0.38 + civ.tradePartners.size * 3.5) * incomeMult;
                 const expense = civ.population * 0.00022 + civ.military * 0.00034;
                 civ.fiscal = income - expense;
                 civ.treasury += civ.fiscal;
-                civ.resourceStock += resourceYield * 0.25 + Math.max(0, civ.fiscal * 0.3);
+                civ.resourceStock += (resourceYield * 0.25 + Math.max(0, civ.fiscal * 0.3)) * incomeMult;
+                
                 civ.supportRate = clamp(civ.supportRate + (civ.fiscal >= 0 ? 0.002 : -0.003) + (Math.random()-0.5)*0.01, 0.05, 0.95);
                 civ.supportRate = clamp(civ.supportRate + (civ.leader.politics - 55) * 0.00005, 0.05, 0.97);
+                // 内政方針ボーナス（支持率回復）
+                if (civ.id === playerCivId && currentPolicy === 'domestic') {
+                    civ.supportRate = clamp(civ.supportRate + 0.003, 0.05, 0.97);
+                }
+                
                 civ.resourceStock += (civ.leader.finance - 55) * 0.03;
                 civ.navy = Math.max(1, civ.navy + (civ.leader.military - 55) * 0.0006);
                 civ.hasSeaAccess = civCoastalAccess(civ);
@@ -1088,12 +1452,17 @@
                     }
                 }
             });
+
+            // 10年に1回の方針決定（建国後から）
+            if (hasFoundedNation && monthCount % 120 === 0 && monthCount > 0) {
+                openPolicyModal();
+            }
         }
 
-        let frameCounter = 0;
         function loop() {
             frameCounter++;
-            if (!isPaused && frameCounter % 3 === 0) updateSim();
+            // 時間の進行を少し遅く調整（元の3から5へ）
+            if (!isPaused && frameCounter % 5 === 0) updateSim();
             renderMap();
             updateUI();
             requestAnimationFrame(loop);
@@ -1106,6 +1475,12 @@
             document.getElementById('btnToggle').addEventListener('click', (e) => {
                 if (pauseLockReason) return;
                 setPauseState(!isPaused);
+            });
+            
+            document.getElementById('btnSave').addEventListener('click', () => openSaveLoadModal('save'));
+            document.getElementById('btnLoad').addEventListener('click', () => {
+                setPauseState(true);
+                openSaveLoadModal('load');
             });
 
             document.getElementById('tabRanking').addEventListener('click', () => {
@@ -1129,9 +1504,9 @@
             const foundModal = document.getElementById('foundModal');
             document.getElementById('btnFound').addEventListener('click', () => {
                 if (hasFoundedNation) return;
-                if (!selectedCell) { alert('首都にする未占領の陸地セルを選択してください。'); return; }
+                if (!selectedCell) { showAlert('首都にする未占領の陸地セルを選択してください。'); return; }
                 const c = map[selectedCell.x][selectedCell.y];
-                if (c.type === 0 || c.civId !== null) { alert('既に国がある場所、または海には建国できません。'); return; }
+                if (c.type === 0 || c.civId !== null) { showAlert('既に国がある場所、または海には建国できません。'); return; }
                 foundModal.classList.remove('hidden');
                 foundModal.classList.add('flex');
             });
@@ -1146,12 +1521,16 @@
                 const ideology = document.getElementById('foundIdeology').value;
                 if (!name) return;
                 const civ = foundPlayerNation(selectedCell.x, selectedCell.y, name, ideology);
-                if (!civ) { alert('この地点には建国できません。'); return; }
+                if (!civ) { showAlert('この地点には建国できません。'); return; }
                 document.getElementById('btnFound').disabled = true;
                 document.getElementById('btnFound').classList.add('opacity-40', 'cursor-not-allowed');
                 document.getElementById('tabLog').textContent = '国家運営';
                 foundModal.classList.add('hidden');
                 foundModal.classList.remove('flex');
+                
+                // 建国直後に最初の方針を決めさせる
+                openPolicyModal();
+                
                 renderNationOps();
                 if (activeTab === 'log') {
                     document.getElementById('logList').classList.add('hidden');
