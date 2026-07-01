@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roomie - ひだまりの足跡</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: M PLUS Rounded 1c (かわいい日本語丸文字フォント) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <!-- Tone.js for cute synthesised retro sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background-color: #f7f3f0;
+            user-select: none;
+        }
+        /* Custom scrollbar for cute aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1ebd9;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e0cca7;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ccb48b;
+        }
+        /* Soft pulsing animation for floating elements */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-6px) rotate(1deg); }
+        }
+        .float-animation {
+            animation: float 4s ease-in-out infinite;
+        }
+        /* Heart burst effect */
+        .heart-particle {
+            position: absolute;
+            pointer-events: none;
+            animation: burst 1s ease-out forwards;
+        }
+        @keyframes burst {
+            0% { transform: translate(0, 0) scale(0.5); opacity: 1; }
+            100% { transform: translate(var(--dx), var(--dy)) scale(1.2); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden text-slate-700">
+
+    <!-- Header/Navigation Bar -->
+    <header class="bg-white/80 backdrop-blur-md border-b-4 border-pink-100 py-3 px-6 flex justify-between items-center shadow-sm sticky top-0 z-30">
+        <div class="flex items-center space-x-2">
+            <span class="text-2xl">🏡</span>
+            <h1 class="text-xl font-bold text-pink-500 tracking-wider">Roomie <span class="text-xs font-normal text-slate-400 bg-pink-50 px-2 py-1 rounded-full border border-pink-100">ひだまりの足跡</span></h1>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button id="btn-stats" class="bg-amber-100 hover:bg-amber-200 border-b-4 border-amber-300 active:border-b-0 active:translate-y-[4px] text-amber-800 font-bold py-1.5 px-3.5 rounded-full text-xs transition-all flex items-center space-x-1">
+                <span>📊</span> <span>きろく</span>
+            </button>
+            <button id="btn-save-load" class="bg-pink-100 hover:bg-pink-200 border-b-4 border-pink-300 active:border-b-0 active:translate-y-[4px] text-pink-700 font-bold py-1.5 px-3.5 rounded-full text-xs transition-all flex items-center space-x-1">
+                <span>💾</span> <span>データの保存・読込</span>
+            </button>
+            <button id="btn-reset-char" class="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-500 hover:text-rose-600 font-semibold py-1 px-2.5 rounded-full text-[10px] transition-all">
+                初期化
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-5xl w-full mx-auto p-4 flex flex-col md:flex-row gap-6 items-stretch">
+        
+        <!-- Room and Character Display Container (Left/Main Side) -->
+        <div class="flex-grow flex flex-col bg-white border-4 border-amber-100 rounded-3xl p-4 shadow-md relative overflow-hidden min-h-[460px] md:w-2/3">
+            <!-- Room Background Overlay (Dynamic Colors depending on time) -->
+            <div id="room-bg" class="absolute inset-0 transition-colors duration-1000 z-0 bg-gradient-to-b from-sky-200 to-amber-50"></div>
+            
+            <!-- Window showing outdoor weather/time -->
+            <div class="absolute top-6 left-8 w-28 h-20 border-4 border-white rounded-lg overflow-hidden shadow-inner z-10 flex flex-col justify-end bg-sky-300">
+                <div id="window-sky" class="w-full h-full bg-gradient-to-b from-sky-400 to-sky-200 relative transition-all duration-1000">
+                    <!-- Sun/Moon dynamically moved by JS -->
+                    <div id="window-celestial" class="absolute w-6 h-6 rounded-full bg-yellow-300 shadow-md transition-all duration-1000" style="top: 15%; left: 15%;"></div>
+                    <!-- Clouds -->
+                    <div class="absolute w-8 h-3 bg-white/70 rounded-full top-1/3 right-2"></div>
+                    <div class="absolute w-6 h-2 bg-white/60 rounded-full top-1/2 left-3"></div>
+                </div>
+                <!-- Hills/Mountain outside -->
+                <div class="h-4 bg-emerald-400 relative">
+                    <div class="absolute -top-1 left-2 w-12 h-4 bg-emerald-500 rounded-full"></div>
+                </div>
+            </div>
+
+            <!-- Dynamic Room Furniture Decor -->
+            <div class="absolute bottom-0 inset-x-0 h-28 bg-amber-100/90 border-t-2 border-amber-200 z-10 flex justify-around items-end px-6">
+                <!-- Indoor plants -->
+                <div class="w-10 h-16 mb-2 relative">
+                    <div class="w-6 h-6 bg-amber-700 rounded-b-lg mx-auto"></div>
+                    <div class="absolute -top-5 left-1 w-8 h-8 bg-emerald-500 rounded-full"></div>
+                    <div class="absolute -top-7 left-3 w-5 h-5 bg-emerald-400 rounded-full"></div>
+                </div>
+                <!-- Mini Table -->
+                <div class="w-24 h-12 bg-amber-200/80 rounded-t-lg border-t-2 border-amber-300 relative flex justify-center items-start">
+                    <!-- Letter left behind (Only visible when out) -->
+                    <div id="letter-on-table" class="hidden absolute -top-4 bg-white border border-rose-300 p-1 rounded shadow cursor-pointer hover:scale-105 transition-transform" title="お留守番の手紙">
+                        ✉️ <span class="text-[9px] text-rose-500 font-bold font-mono">Note</span>
+                    </div>
+                </div>
+                <!-- Cozy Rug -->
+                <div class="w-40 h-4 bg-pink-100 rounded-full border-b border-pink-200 mb-1 mx-auto flex items-center justify-center">
+                    <div class="w-36 h-2 bg-pink-200 rounded-full"></div>
+                </div>
+                <!-- Small Bed -->
+                <div class="w-20 h-14 bg-amber-50 rounded-t-md border-t-2 border-amber-200 border-x relative">
+                    <div class="w-full h-4 bg-rose-200 rounded-t-sm"></div>
+                    <div class="absolute -top-2 right-1 w-6 h-4 bg-white rounded-md shadow-xs"></div>
+                </div>
+            </div>
+
+            <!-- Character Layer & Speeches -->
+            <div class="relative z-20 flex-grow flex flex-col items-center justify-center pb-24">
+                
+                <!-- Speech Bubble (Visible when character talks or has state) -->
+                <div id="speech-bubble" class="mb-4 bg-white/95 border-2 border-pink-200 p-3 rounded-2xl shadow-md max-w-xs relative text-xs md:text-sm font-medium float-animation transition-all duration-300 opacity-0 scale-95 translate-y-2 pointer-events-none">
+                    <p id="speech-text" class="leading-relaxed">...</p>
+                    <div class="absolute bottom-[-10px] left-1/2 -translate-x-1/2 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-white"></div>
+                    <div class="absolute bottom-[-12px] left-1/2 -translate-x-1/2 w-0 h-0 border-x-[9px] border-x-transparent border-t-[9px] border-t-pink-200 -z-10"></div>
+                </div>
+
+                <!-- Character Container (Click to Interact) -->
+                <div id="character-anchor" class="relative cursor-pointer transition-transform duration-300 active:scale-95 flex flex-col items-center">
+                    
+                    <!-- Dynamic SVG Character -->
+                    <div id="char-svg-container" class="w-48 h-48 drop-shadow-md">
+                        <!-- Custom Human SVG gets injected here -->
+                    </div>
+
+                    <!-- Shadows under character -->
+                    <div id="char-shadow" class="w-24 h-3 bg-black/10 rounded-full blur-[2px] mt-1 transition-all duration-500"></div>
+                </div>
+
+                <!-- Hand Overlay when petting -->
+                <div id="petting-hand" class="absolute pointer-events-none text-3xl opacity-0 transition-all duration-200">🫳</div>
+            </div>
+
+            <!-- Room overlay: Out of home notice -->
+            <div id="out-overlay" class="hidden absolute inset-0 bg-black/10 backdrop-blur-xs z-25 flex flex-col justify-center items-center p-6 text-center">
+                <div class="bg-white/95 p-6 rounded-3xl border-4 border-amber-200 shadow-xl max-w-sm transform scale-100 transition-transform">
+                    <span class="text-4xl block mb-2">🍃</span>
+                    <h3 id="out-status-title" class="text-lg font-bold text-amber-600 mb-1">お出かけ中...</h3>
+                    <p id="out-status-desc" class="text-xs text-slate-500 mb-4">ただいまお部屋には誰もいません。</p>
+                    <div class="bg-amber-50 p-3 rounded-xl border border-amber-100 text-xs text-left mb-4">
+                        <p class="font-semibold text-slate-700">📌 置き手紙：</p>
+                        <p id="out-letter-preview" class="italic text-slate-600 font-medium">「ちょっとコンビニに行ってくるね！」</p>
+                    </div>
+                    <p id="out-return-timer" class="text-[11px] font-bold text-pink-500 animate-pulse bg-pink-50 py-1.5 px-3 rounded-full inline-block">帰宅まで: あと --分 --秒</p>
+                </div>
+            </div>
+
+            <!-- Quick Character Status HUD inside room -->
+            <div class="absolute top-4 right-4 z-20 bg-white/90 backdrop-blur-xs p-2.5 rounded-2xl border border-pink-100 shadow-sm text-xs flex flex-col space-y-1">
+                <div class="flex items-center space-x-1">
+                    <span id="char-quick-icon">🧸</span>
+                    <span id="char-quick-name" class="font-bold text-slate-800">キャラクター</span>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <span class="text-rose-400">💖</span>
+                    <span class="font-mono text-[10px] text-slate-500">なつき度:</span>
+                    <span id="char-quick-love" class="font-bold text-rose-500">Lv.1 (0)</span>
+                </div>
+                <div class="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden mt-0.5">
+                    <div id="char-quick-love-bar" class="bg-rose-400 h-full w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+            
+            <!-- Real Time Display Overlay inside room -->
+            <div class="absolute bottom-4 left-4 z-20 bg-slate-900/40 backdrop-blur-xs px-3 py-1.5 rounded-xl text-[11px] text-white font-mono flex items-center space-x-2">
+                <span id="current-time-emoji">☀️</span>
+                <span id="current-time-string">2026/07/01 00:00:00</span>
+            </div>
+        </div>
+
+        <!-- Right side controller (Customizer, Info panel, Settings) -->
+        <div class="md:w-1/3 flex flex-col space-y-4">
+            
+            <!-- Character Profile Summary Panel -->
+            <div class="bg-white border-4 border-pink-100 rounded-3xl p-4 shadow-md">
+                <div class="flex items-center space-x-2 mb-3 border-b-2 border-pink-50 pb-2">
+                    <span class="text-xl">📄</span>
+                    <h2 class="text-md font-bold text-slate-800">プロフィール</h2>
+                </div>
+                
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between py-1 border-b border-dashed border-slate-100">
+                        <span class="text-slate-400">名前</span>
+                        <span id="prof-name" class="font-bold text-slate-700">-</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-dashed border-slate-100">
+                        <span class="text-slate-400">性別</span>
+                        <span id="prof-gender" class="font-bold text-slate-700">-</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-dashed border-slate-100">
+                        <span class="text-slate-400">生年月日</span>
+                        <span id="prof-birth" class="font-bold text-slate-700">-</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-dashed border-slate-100">
+                        <span class="text-slate-400">性格</span>
+                        <span id="prof-personality" class="font-bold text-slate-700">-</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-dashed border-slate-100">
+                        <span class="text-slate-400">好きなもの</span>
+                        <span id="prof-favorite" class="font-bold text-slate-700">-</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-dashed border-slate-100">
+                        <span class="text-slate-400">出会ってから</span>
+                        <span id="prof-days" class="font-bold text-pink-500">- 日目</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-dashed border-slate-100">
+                        <span class="text-slate-400">状態</span>
+                        <span id="prof-status" class="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">-</span>
+                    </div>
+                </div>
+
+                <!-- Customizer Toggle Button -->
+                <button id="btn-toggle-customizer" class="mt-4 w-full bg-pink-400 hover:bg-pink-500 border-b-4 border-pink-600 active:border-b-0 active:translate-y-[4px] text-white font-bold py-2 px-4 rounded-2xl text-xs transition-all flex items-center justify-center space-x-1">
+                    <span>🎨</span> <span>見た目・プロフィールの変更</span>
+                </button>
+            </div>
+
+            <!-- Interactivity / Quick Log panel -->
+            <div class="bg-white border-4 border-emerald-100 rounded-3xl p-4 shadow-md flex-grow flex flex-col min-h-[200px]">
+                <div class="flex items-center justify-between mb-3 border-b-2 border-emerald-50 pb-2">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">💬</span>
+                        <h2 class="text-md font-bold text-slate-800">日誌 & おしゃべり</h2>
+                    </div>
+                    <button id="btn-clear-log" class="text-[10px] text-slate-400 hover:text-rose-500">クリア</button>
+                </div>
+                
+                <!-- Simple log board -->
+                <div id="activity-log" class="flex-grow overflow-y-auto bg-emerald-50/50 p-2.5 rounded-2xl border border-emerald-100 text-[11px] space-y-1.5 max-h-[220px]">
+                    <!-- Sample log items -->
+                    <div class="text-slate-400 italic text-center py-2">何も記録されていません。</div>
+                </div>
+                
+                <!-- Light interaction tip -->
+                <div class="mt-3 text-[10px] text-slate-400 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    💡 <span class="font-bold">遊び方:</span> キャラクターをクリックすると「なでなで」できます！撫でると愛着度が少し上がります。現実の時間に連動して外出したり、寝たりします。
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: Profile and Avatar Editor -->
+    <div id="modal-customizer" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white border-4 border-pink-200 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 flex flex-col transform transition-all scale-95 duration-200">
+            
+            <div class="flex justify-between items-center border-b-2 border-pink-50 pb-3 mb-4">
+                <h3 class="text-lg font-bold text-pink-500 flex items-center space-x-2">
+                    <span>🎨</span> <span>キャラクターをクリエイトする</span>
+                </h3>
+                <button id="btn-close-customizer" class="text-slate-400 hover:text-rose-500 font-bold text-lg p-1">✕</button>
+            </div>
+
+            <!-- Editor Grid Layout -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Profile Inputs Column -->
+                <div class="space-y-4">
+                    <h4 class="font-bold text-sm text-slate-600 border-l-4 border-pink-400 pl-2">プロフィール設定</h4>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">名前</label>
+                            <input id="input-name" type="text" maxlength="10" placeholder="ちひろ" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:border-pink-300 focus:outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 mb-1">性別</label>
+                                <select id="input-gender" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:border-pink-300 focus:outline-none">
+                                    <option value="女の子">女の子</option>
+                                    <option value="男の子">男の子</option>
+                                    <option value="お友達">お友達</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 mb-1">生年月日</label>
+                                <input id="input-birth" type="date" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-2 py-1.5 text-xs focus:border-pink-300 focus:outline-none">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 mb-1">性格</label>
+                                <select id="input-personality" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:border-pink-300 focus:outline-none">
+                                    <option value="素直">素直</option>
+                                    <option value="ツンデレ">ツンデレ</option>
+                                    <option value="のんびり">のんびり</option>
+                                    <option value="まじめ">まじめ</option>
+                                    <option value="おてんば">おてんば</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 mb-1">好きなもの</label>
+                                <input id="input-favorite" type="text" maxlength="15" placeholder="甘いもの, 読書" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:border-pink-300 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Avatar Custimization Column -->
+                <div class="space-y-4">
+                    <h4 class="font-bold text-sm text-slate-600 border-l-4 border-pink-400 pl-2">アバターカスタマイズ</h4>
+
+                    <!-- Dynamic Avatar Real-Time Preview -->
+                    <div class="bg-amber-50/50 border-2 border-amber-100 p-3 rounded-2xl flex justify-center items-center h-40 relative">
+                        <div id="preview-avatar-container" class="w-32 h-32">
+                            <!-- SVG gets injected in preview -->
+                        </div>
+                        <span class="absolute top-2 left-2 text-[10px] text-amber-600 bg-amber-100/60 px-2 py-0.5 rounded-md font-bold">プレビュー</span>
+                    </div>
+
+                    <!-- Customizer Selectors -->
+                    <div class="space-y-2 text-xs">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">髪型</label>
+                                <select id="avatar-hair-style" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:border-pink-300 focus:outline-none">
+                                    <option value="short">ショート</option>
+                                    <option value="bob">ボブ</option>
+                                    <option value="twin">ツインテール</option>
+                                    <option value="pony">ポニーテール</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">髪色</label>
+                                <select id="avatar-hair-color" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:border-pink-300 focus:outline-none">
+                                    <option value="#f8a5c2">サクラ</option>
+                                    <option value="#6c5ce7">ラベンダー</option>
+                                    <option value="#ffeaa7">ハニーゴールド</option>
+                                    <option value="#74b9ff">アクア</option>
+                                    <option value="#2d3436">ブラック</option>
+                                    <option value="#e17055">ショコラ</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">服スタイル</label>
+                                <select id="avatar-clothing-style" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:border-pink-300 focus:outline-none">
+                                    <option value="casual">カジュアル</option>
+                                    <option value="school">セーラー</option>
+                                    <option value="hoodie">パーカー</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">服の色</label>
+                                <select id="avatar-clothing-color" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:border-pink-300 focus:outline-none">
+                                    <option value="#ff7675">ローズ</option>
+                                    <option value="#55efc4">ミント</option>
+                                    <option value="#a29bfe">パステルパープル</option>
+                                    <option value="#ffeaa7">ミルキーイエロー</option>
+                                    <option value="#0984e3">スカイブルー</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">瞳の色</label>
+                                <select id="avatar-eye-color" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:border-pink-300 focus:outline-none">
+                                    <option value="#2d3436">ブラック</option>
+                                    <option value="#0984e3">ブルー</option>
+                                    <option value="#20bf6b">グリーン</option>
+                                    <option value="#eb3b5a">レッド</option>
+                                    <option value="#fa8231">アンバー</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">肌の色</label>
+                                <select id="avatar-skin-color" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:border-pink-300 focus:outline-none">
+                                    <option value="#ffeaa7">ノーマル</option>
+                                    <option value="#fff9e6">美白</option>
+                                    <option value="#f0d2a8">小麦肌</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal footer actions -->
+            <div class="mt-6 flex justify-end space-x-3 border-t border-slate-100 pt-4">
+                <button id="btn-cancel-customizer" class="bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-2 px-4 rounded-xl text-xs transition-all">キャンセル</button>
+                <button id="btn-save-customizer" class="bg-pink-400 hover:bg-pink-500 border-b-4 border-pink-600 text-white font-bold py-2 px-6 rounded-xl text-xs transition-all">この内容で決定！</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Play Stats & Records -->
+    <div id="modal-stats" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white border-4 border-amber-200 rounded-3xl w-full max-w-md shadow-2xl p-6 flex flex-col transform transition-all scale-95 duration-200">
+            <div class="flex justify-between items-center border-b-2 border-amber-50 pb-3 mb-4">
+                <h3 class="text-lg font-bold text-amber-600 flex items-center space-x-2">
+                    <span>📊</span> <span>きろく手帳</span>
+                </h3>
+                <button id="btn-close-stats" class="text-slate-400 hover:text-amber-600 font-bold text-lg p-1">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div class="p-3 bg-amber-50/50 border border-amber-100 rounded-2xl">
+                    <p class="font-bold text-amber-800 mb-2">🤝 あなたとの軌跡</p>
+                    <div class="grid grid-cols-2 gap-3 text-slate-600">
+                        <div>
+                            <p class="text-[10px] text-slate-400">出会った日付</p>
+                            <p id="stats-first-met" class="font-bold text-slate-700">----/--/--</p>
+                        </div>
+                        <div>
+                            <p class="text-[10px] text-slate-400">一緒に暮らした日数</p>
+                            <p id="stats-total-days" class="font-bold text-slate-700">- 日</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-pink-50/50 border border-pink-100 rounded-2xl">
+                    <p class="font-bold text-pink-800 mb-2">⏱️ 時間のログ</p>
+                    <div class="grid grid-cols-2 gap-3 text-slate-600">
+                        <div>
+                            <p class="text-[10px] text-slate-400">合計オンライン時間</p>
+                            <p id="stats-online-time" class="font-bold text-slate-700">--分 --秒</p>
+                        </div>
+                        <div>
+                            <p class="text-[10px] text-slate-400">離れていた(オフライン)時間</p>
+                            <p id="stats-offline-time" class="font-bold text-slate-700">--分 --秒</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                    <p class="font-bold text-emerald-800 mb-2">🌟 なつき度レベル</p>
+                    <div class="space-y-1">
+                        <div class="flex justify-between font-bold text-slate-700">
+                            <span id="stats-love-level">Lv.1</span>
+                            <span id="stats-love-points">0 / 100 pt</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400">
+                            ※時間経過やなでなで（毎日上限まで）でポイントが貯まります。
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-close-stats-footer" class="mt-5 w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 rounded-xl text-xs transition-all text-center">
+                とじる
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal: Save & Load (Data portability) -->
+    <div id="modal-save-load" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white border-4 border-pink-200 rounded-3xl w-full max-w-lg shadow-2xl p-6 flex flex-col transform transition-all scale-95 duration-200">
+            <div class="flex justify-between items-center border-b-2 border-pink-50 pb-3 mb-4">
+                <h3 class="text-lg font-bold text-pink-500 flex items-center space-x-2">
+                    <span>💾</span> <span>データの保存・読み込み</span>
+                </h3>
+                <button id="btn-close-save-load" class="text-slate-400 hover:text-pink-500 font-bold text-lg p-1">✕</button>
+            </div>
+
+            <p class="text-[11px] text-slate-400 mb-4 leading-relaxed">
+                ブラウザのローカルストレージにも自動セーブされますが、別の端末に移行したい場合や、バックアップを取りたい場合は、以下の「セーブ文字列」をコピーして保存してください。
+            </p>
+
+            <div class="space-y-4">
+                <!-- Export Section -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">📋 セーブ文字列（エクスポート）</label>
+                    <div class="flex space-x-2">
+                        <textarea id="output-save-string" readonly class="flex-grow bg-slate-50 border-2 border-slate-200 rounded-xl p-2 text-[10px] font-mono h-20 resize-none focus:outline-none focus:border-pink-300" placeholder="ここに現在のデータが出力されます"></textarea>
+                        <button id="btn-copy-save" class="bg-pink-400 hover:bg-pink-500 text-white font-bold px-3 rounded-xl text-xs transition-all flex flex-col items-center justify-center space-y-1">
+                            <span>📋</span> <span class="text-[10px]">コピー</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Import Section -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">📥 セーブ文字列を入力（インポート）</label>
+                    <div class="flex space-x-2">
+                        <textarea id="input-load-string" class="flex-grow bg-slate-50 border-2 border-slate-200 rounded-xl p-2 text-[10px] font-mono h-20 resize-none focus:outline-none focus:border-pink-300" placeholder="ここにセーブ文字列を貼り付けてください"></textarea>
+                        <button id="btn-trigger-load" class="bg-emerald-400 hover:bg-emerald-500 text-white font-bold px-3 rounded-xl text-xs transition-all flex flex-col items-center justify-center space-y-1">
+                            <span>📥</span> <span class="text-[10px]">読込</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Soft warning feedback box -->
+            <div id="save-feedback" class="hidden mt-3 p-2 rounded-xl text-center text-xs font-semibold"></div>
+
+            <button id="btn-close-save-load-footer" class="mt-5 w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 rounded-xl text-xs transition-all text-center">
+                とじる
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Popups instead of system alert -->
+    <div id="custom-toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white text-xs px-4 py-2.5 rounded-full shadow-lg font-bold opacity-0 transition-all duration-300 flex items-center space-x-2 pointer-events-none">
+        <span id="toast-icon">✨</span>
+        <span id="toast-msg">メッセージ</span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white/80 py-3 text-center text-[10px] text-slate-400 border-t border-slate-100 z-10">
+        <p>© 2026 Roomie - ひだまりの足跡 | 現実時間ベースのちいさな居候の観察日記</p>
+    </footer>
+
+    <script>
+        // --- 1. Sound effects using native browser Tone.js Synthesis ---
+        const playSynthBeep = (type) => {
+            try {
+                const synth = new Tone.Synth({
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.2 }
+                }).toDestination();
+                
+                if (type === 'click') {
+                    synth.triggerAttackRelease("C6", "16n");
+                } else if (type === 'love') {
+                    synth.triggerAttackRelease("E6", "16n");
+                    setTimeout(() => synth.triggerAttackRelease("G6", "16n"), 80);
+                } else if (type === 'save') {
+                    synth.triggerAttackRelease("F5", "16n");
+                    setTimeout(() => synth.triggerAttackRelease("A5", "16n"), 60);
+                    setTimeout(() => synth.triggerAttackRelease("C6", "16n"), 120);
+                } else if (type === 'fail') {
+                    synth.triggerAttackRelease("C4", "8n");
+                }
+            } catch (e) {
+                // Audio Context might be locked or unsupported on some devices
+            }
+        };
+
+        // UI Toast Utility
+        const showToast = (msg, icon = '✨', duration = 3000) => {
+            const toast = document.getElementById('custom-toast');
+            document.getElementById('toast-msg').innerText = msg;
+            document.getElementById('toast-icon').innerText = icon;
+            
+            toast.style.opacity = '1';
+            toast.style.transform = 'translate(-50%, 10px)';
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translate(-50%, 0)';
+            }, duration);
+        };
+
+        // --- 2. State & Storage Management ---
+        const DEFAULT_STATE = {
+            char: {
+                name: "ひより",
+                gender: "女の子",
+                birth: "2018-04-12",
+                personality: "のんびり",
+                favorite: "あまいカステラ",
+                avatar: {
+                    hairStyle: "bob",
+                    hairColor: "#f8a5c2",
+                    clothingStyle: "casual",
+                    clothingColor: "#ff7675",
+                    eyeColor: "#2d3436",
+                    skinColor: "#ffeaa7"
+                }
+            },
+            metTime: Date.now() - (1000 * 60 * 60 * 2), // met 2 hours ago by default
+            lovePoints: 20, // base affection
+            lastPetTime: 0,
+            petCountToday: 0,
+            totalOnlineTime: 0, // seconds
+            totalOfflineTime: 0, // seconds
+            lastOfflineTime: Date.now(),
+            logs: []
+        };
+
+        let state = {};
+
+        // Load state from local storage or set defaults
+        const loadState = () => {
+            const saved = localStorage.getItem('ROOMIE_STATE');
+            if (saved) {
+                try {
+                    state = JSON.parse(saved);
+                    // Fill default values for missing keys if old saves are present
+                    state = { ...DEFAULT_STATE, ...state };
+                    state.char = { ...DEFAULT_STATE.char, ...state.char };
+                    state.char.avatar = { ...DEFAULT_STATE.char.avatar, ...state.char.avatar };
+                } catch (e) {
+                    state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+                }
+            } else {
+                state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+            }
+        };
+
+        const saveState = () => {
+            state.lastOfflineTime = Date.now();
+            localStorage.setItem('ROOMIE_STATE', JSON.stringify(state));
+        };
+
+        // Dynamic log adding helper
+        const addActivityLog = (text, type = 'info') => {
+            const logContainer = document.getElementById('activity-log');
+            if (state.logs.length === 0 || state.logs[state.logs.length-1].text !== text) {
+                const now = new Date();
+                const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                
+                state.logs.push({ time: timeStr, text: text, type: type });
+                if (state.logs.length > 30) state.logs.shift(); // Keep last 30 logs
+                renderLogs();
+            }
+        };
+
+        const renderLogs = () => {
+            const logContainer = document.getElementById('activity-log');
+            if (state.logs.length === 0) {
+                logContainer.innerHTML = `<div class="text-slate-400 italic text-center py-2">何も記録されていません。</div>`;
+                return;
+            }
+            logContainer.innerHTML = state.logs.map(l => {
+                let badgeColor = 'bg-slate-200 text-slate-600';
+                if (l.type === 'love') badgeColor = 'bg-rose-100 text-rose-500';
+                if (l.type === 'activity') badgeColor = 'bg-sky-100 text-sky-600';
+                if (l.type === 'out') badgeColor = 'bg-amber-100 text-amber-600';
+                return `
+                    <div class="flex items-start space-x-1 border-b border-slate-100 pb-1">
+                        <span class="font-mono text-slate-400 text-[10px] pt-0.5">${l.time}</span>
+                        <span class="${badgeColor} text-[8px] font-bold px-1 rounded-sm">日誌</span>
+                        <span class="text-slate-600 font-medium">${l.text}</span>
+                    </div>
+                `;
+            }).reverse().join('');
+        };
+
+        // --- 3. Dynamic Human Character SVG Generator ---
+        const generateCharacterSVG = (avatarData, facialState = 'normal') => {
+            const { hairStyle, hairColor, clothingStyle, clothingColor, eyeColor, skinColor } = avatarData;
+
+            // Face details based on emotional state
+            let eyesSVG = '';
+            let mouthSVG = '';
+            let accessorySVG = '';
+
+            if (facialState === 'normal') {
+                eyesSVG = `
+                    <!-- Left eye -->
+                    <circle cx="85" cy="100" r="5" fill="${eyeColor}" />
+                    <circle cx="83" cy="98" r="1.5" fill="#fff" />
+                    <!-- Right eye -->
+                    <circle cx="115" cy="100" r="5" fill="${eyeColor}" />
+                    <circle cx="113" cy="98" r="1.5" fill="#fff" />
+                `;
+                mouthSVG = `<path d="M 95 112 Q 100 115 105 112" stroke="#2d3436" stroke-width="2" fill="none" stroke-linecap="round" />`;
+            } else if (facialState === 'happy') {
+                eyesSVG = `
+                    <!-- Happy curving eyes -->
+                    <path d="M 80 102 Q 85 96 90 102" stroke="${eyeColor}" stroke-width="3" fill="none" stroke-linecap="round" />
+                    <path d="M 110 102 Q 115 96 120 102" stroke="${eyeColor}" stroke-width="3" fill="none" stroke-linecap="round" />
+                `;
+                mouthSVG = `<path d="M 94 110 Q 100 118 106 110" stroke="#eb2f06" stroke-width="2.5" fill="#ff7675" stroke-linecap="round" />`;
+                accessorySVG = `
+                    <!-- Soft blush cheeks -->
+                    <ellipse cx="78" cy="108" rx="6" ry="3" fill="#ff7675" opacity="0.6" />
+                    <ellipse cx="122" cy="108" rx="6" ry="3" fill="#ff7675" opacity="0.6" />
+                `;
+            } else if (facialState === 'sleepy') {
+                eyesSVG = `
+                    <!-- Sleeping flat/curved down eyes -->
+                    <path d="M 80 100 Q 85 104 90 100" stroke="#2d3436" stroke-width="2.5" fill="none" stroke-linecap="round" />
+                    <path d="M 110 100 Q 115 104 120 100" stroke="#2d3436" stroke-width="2.5" fill="none" stroke-linecap="round" />
+                `;
+                mouthSVG = `<circle cx="100" cy="112" r="3" fill="#2d3436" />`;
+                accessorySVG = `
+                    <!-- Sleeping bubble -->
+                    <g transform="translate(125, 80) scale(0.8)">
+                        <circle cx="10" cy="10" r="10" fill="#a29bfe" opacity="0.7"/>
+                        <text x="10" y="14" font-family="sans-serif" font-weight="bold" font-size="12" fill="white" text-anchor="middle">Z</text>
+                    </g>
+                `;
+            } else if (facialState === 'blush') {
+                eyesSVG = `
+                    <circle cx="85" cy="100" r="5" fill="${eyeColor}" />
+                    <circle cx="83" cy="98" r="1.5" fill="#fff" />
+                    <circle cx="115" cy="100" r="5" fill="${eyeColor}" />
+                    <circle cx="113" cy="98" r="1.5" fill="#fff" />
+                `;
+                mouthSVG = `<path d="M 96 112 H 104" stroke="#2d3436" stroke-width="2" stroke-linecap="round" />`;
+                accessorySVG = `
+                    <!-- Heavy pink blush lines -->
+                    <g stroke="#ff7675" stroke-width="1.5" stroke-linecap="round" opacity="0.8">
+                        <line x1="75" y1="106" x2="79" y2="111" />
+                        <line x1="79" y1="106" x2="83" y2="111" />
+                        <line x1="117" y1="106" x2="121" y2="111" />
+                        <line x1="121" y1="106" x2="125" y2="111" />
+                    </g>
+                `;
+            }
+
+            // Hair options rendered dynamically
+            let hairBackSVG = '';
+            let hairFrontSVG = '';
+
+            if (hairStyle === 'short') {
+                hairBackSVG = `<path d="M 70 85 Q 100 45 130 85 L 135 110 Q 100 100 65 110 Z" fill="${hairColor}" />`;
+                hairFrontSVG = `
+                    <path d="M 70 80 Q 100 65 130 80 Q 120 92 110 90 Q 100 95 90 90 Q 80 92 70 80 Z" fill="${hairColor}" />
+                    <path d="M 66 84 Q 72 98 76 102" stroke="${hairColor}" stroke-width="4" fill="none" stroke-linecap="round"/>
+                    <path d="M 134 84 Q 128 98 124 102" stroke="${hairColor}" stroke-width="4" fill="none" stroke-linecap="round"/>
+                `;
+            } else if (hairStyle === 'bob') {
+                hairBackSVG = `<path d="M 64 80 Q 100 45 136 80 Q 142 120 135 125 Q 100 115 65 125 Q 58 120 64 80 Z" fill="${hairColor}" />`;
+                hairFrontSVG = `
+                    <path d="M 64 78 Q 100 60 136 78 Q 120 90 100 90 Q 80 90 64 78 Z" fill="${hairColor}" />
+                    <path d="M 64 80 L 64 105" stroke="${hairColor}" stroke-width="5" fill="none" stroke-linecap="round"/>
+                    <path d="M 136 80 L 136 105" stroke="${hairColor}" stroke-width="5" fill="none" stroke-linecap="round"/>
+                `;
+            } else if (hairStyle === 'twin') {
+                hairBackSVG = `
+                    <!-- Twin-tails -->
+                    <ellipse cx="50" cy="110" rx="14" ry="25" fill="${hairColor}" transform="rotate(-15 50 110)"/>
+                    <ellipse cx="150" cy="110" rx="14" ry="25" fill="${hairColor}" transform="rotate(15 150 110)"/>
+                    <path d="M 70 85 Q 100 50 130 85 Z" fill="${hairColor}" />
+                `;
+                hairFrontSVG = `
+                    <path d="M 70 80 Q 100 65 130 80 Q 115 90 100 90 Q 85 90 70 80 Z" fill="${hairColor}" />
+                    <!-- Hair ribbons -->
+                    <circle cx="58" cy="90" r="4" fill="#eb2f06" />
+                    <circle cx="142" cy="90" r="4" fill="#eb2f06" />
+                `;
+            } else if (hairStyle === 'pony') {
+                hairBackSVG = `
+                    <!-- Ponytail sweeping to the side -->
+                    <path d="M 130 75 Q 165 65 170 110 Q 155 120 130 90 Z" fill="${hairColor}" />
+                    <path d="M 70 85 Q 100 50 130 85 Z" fill="${hairColor}" />
+                `;
+                hairFrontSVG = `
+                    <path d="M 70 80 Q 100 65 130 80 Q 115 90 100 88 Q 85 90 70 80 Z" fill="${hairColor}" />
+                    <!-- Hair ties -->
+                    <rect x="124" y="70" width="8" height="6" rx="2" fill="#2d3436" transform="rotate(15 128 73)" />
+                `;
+            }
+
+            // Clothing SVG blocks
+            let bodySVG = '';
+            if (clothingStyle === 'casual') {
+                bodySVG = `
+                    <!-- Shoulders & Tee -->
+                    <path d="M 70 145 Q 100 138 130 145 L 140 180 H 60 Z" fill="${clothingColor}" />
+                    <!-- Cute collar mark -->
+                    <path d="M 90 143 Q 100 152 110 143" stroke="${skinColor}" stroke-width="3" fill="none" />
+                    <!-- Mini emblem on Tee -->
+                    <circle cx="100" cy="162" r="3.5" fill="#fbc531" />
+                `;
+            } else if (clothingStyle === 'school') {
+                bodySVG = `
+                    <!-- Uniform Sailors Shirt -->
+                    <path d="M 70 145 Q 100 138 130 145 L 140 180 H 60 Z" fill="#f5f6fa" />
+                    <!-- Sailor collar -->
+                    <path d="M 70 145 L 85 168 L 100 150 L 115 168 L 130 145 Z" fill="${clothingColor}" stroke="#dcdde1" stroke-width="1" />
+                    <!-- Red Bowtie -->
+                    <path d="M 96 160 L 100 155 L 104 160 L 100 166 Z" fill="#e84118" />
+                    <circle cx="100" cy="158" r="2.5" fill="#c23616" />
+                `;
+            } else if (clothingStyle === 'hoodie') {
+                bodySVG = `
+                    <!-- Oversized hoodie -->
+                    <path d="M 65 145 Q 100 135 135 145 L 142 180 H 58 Z" fill="${clothingColor}" />
+                    <!-- Hoodie collar/hood crease -->
+                    <path d="M 70 142 Q 100 162 130 142" stroke="#2d3436" stroke-width="1" fill="none" opacity="0.2" />
+                    <!-- Drawstrings -->
+                    <line x1="93" y1="152" x2="93" y2="168" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+                    <line x1="107" y1="152" x2="107" y2="168" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+                    <circle cx="93" cy="170" r="1.5" fill="#f5f6fa" />
+                    <circle cx="107" cy="170" r="1.5" fill="#f5f6fa" />
+                `;
+            }
+
+            return `
+                <svg viewBox="0 0 200 200" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Base shadow -->
+                    <ellipse cx="100" cy="180" rx="35" ry="5" fill="#2d3436" opacity="0.08" />
+                    
+                    <!-- Back Hair -->
+                    ${hairBackSVG}
+
+                    <!-- Neck -->
+                    <rect x="94" y="130" width="12" height="18" fill="${skinColor}" rx="4" />
+                    <!-- Neck shadow -->
+                    <path d="M 94 135 Q 100 140 106 135" stroke="#2d3436" stroke-width="1.5" fill="none" opacity="0.1" />
+
+                    <!-- Human Body (Clothing) -->
+                    ${bodySVG}
+
+                    <!-- Face Head Structure -->
+                    <ellipse cx="100" cy="108" rx="35" ry="32" fill="${skinColor}" />
+                    <!-- Left ear -->
+                    <circle cx="63" cy="108" r="6" fill="${skinColor}" />
+                    <!-- Right ear -->
+                    <circle cx="137" cy="108" r="6" fill="${skinColor}" />
+
+                    <!-- Eye structures & Blushes -->
+                    ${eyesSVG}
+                    ${accessorySVG}
+
+                    <!-- Mouth -->
+                    ${mouthSVG}
+
+                    <!-- Front Hair (Bangs) -->
+                    ${hairFrontSVG}
+
+                    <!-- Little hair cowlick (Ahoge) for cuteness -->
+                    <path d="M 100 55 Q 108 42 118 48 Q 112 52 103 54" fill="${hairColor}" stroke="${hairColor}" stroke-width="1" stroke-linecap="round"/>
+                </svg>
+            `;
+        };
+
+        const renderMainCharacter = (mood = 'normal') => {
+            const container = document.getElementById('char-svg-container');
+            container.innerHTML = generateCharacterSVG(state.char.avatar, mood);
+        };
+
+        const renderPreviewCharacter = () => {
+            const container = document.getElementById('preview-avatar-container');
+            
+            // Extract from customizer DOM state
+            const previewData = {
+                hairStyle: document.getElementById('avatar-hair-style').value,
+                hairColor: document.getElementById('avatar-hair-color').value,
+                clothingStyle: document.getElementById('avatar-clothing-style').value,
+                clothingColor: document.getElementById('avatar-clothing-color').value,
+                eyeColor: document.getElementById('avatar-eye-color').value,
+                skinColor: document.getElementById('avatar-skin-color').value
+            };
+            
+            container.innerHTML = generateCharacterSVG(previewData, 'happy');
+        };
+
+        // --- 4. STREAMING_CHUNK: Core Timers & Simulation (Realistic clock & Scheduler) ---
+        // Setup initial timers
+        let lastTimestamp = Date.now();
+        let currentHour = new Date().getHours();
+        
+        // Out of Home Schedule Engine
+        // Decides randomly whether characters are home or out based on realistic hourly schedules
+        let scheduleState = {
+            isAway: false,
+            awayDestination: "",
+            awayMessage: "",
+            returnTime: 0 // timestamp
+        };
+
+        const TRIP_DESTINATIONS = [
+            { place: "近所のコンビニ", desc: "お気に入りのカステラを買いに行ってきます！", dur: 10 },
+            { place: "静かな図書館", desc: "ちょっと気になる本を読みに図書館へ行ってきます。", dur: 45 },
+            { place: "ぽかぽか公園", desc: "いい天気なので、少しのんびり風にあたりに公園を散歩中。", dur: 30 },
+            { place: "おしゃれなカフェ", desc: "カフェでゆっくりミルクティーを飲んできますね。", dur: 40 },
+            { place: "総合スーパー", desc: "晩ごはんの食材を買い出しに行ってきます！", dur: 25 }
+        ];
+
+        const rollForOutdoorActivity = (hour) => {
+            // High probabilities of going out during daylight / evening intervals
+            let goOutChance = 0.05; // default low chance
+            
+            if (hour >= 10 && hour <= 12) goOutChance = 0.25; // Morning grocery/walk
+            else if (hour >= 14 && hour <= 16) goOutChance = 0.35; // Afternoon coffee/park
+            else if (hour >= 18 && hour <= 20) goOutChance = 0.20; // Dinner run
+            
+            // If random rolls success and not already sleeping/midnight
+            if (hour >= 23 || hour < 6) {
+                return; // Absolutely sleeping, no go out
+            }
+
+            if (Math.random() < goOutChance && !scheduleState.isAway) {
+                const trip = TRIP_DESTINATIONS[Math.floor(Math.random() * TRIP_DESTINATIONS.length)];
+                
+                scheduleState.isAway = true;
+                scheduleState.awayDestination = trip.place;
+                scheduleState.awayMessage = trip.desc;
+                // Keep away duration between 5 to trips default
+                const realDurMin = Math.max(5, Math.floor(Math.random() * trip.dur) + 5);
+                scheduleState.returnTime = Date.now() + (realDurMin * 60 * 1000);
+                
+                addActivityLog(`${state.char.name}が「${trip.place}」へお出かけしました。`, 'out');
+                saveState();
+            }
+        };
+
+        // Calculate Affection & Level milestones
+        const getLoveLevel = (points) => {
+            if (points < 50) return { lv: 1, text: "出会い", max: 50 };
+            if (points < 150) return { lv: 2, text: "ともだち", max: 150 };
+            if (points < 350) return { lv: 3, text: "なかよし", max: 350 };
+            if (points < 700) return { lv: 4, text: "信頼", max: 700 };
+            return { lv: 5, text: "相思相愛", max: 1500 };
+        };
+
+        // --- 5. Speech dialogue generator based on states, affection, and reality clock ---
+        const CHARACTER_DIALOGUES = {
+            morning: [
+                "おはよう！今日も良い朝だね。",
+                "ふあぁ…まだ少しねむいかも…",
+                "朝ごはんは何にする？しっかり食べようね！",
+                "今日も一日、無理せずがんばろう。"
+            ],
+            afternoon: [
+                "お外はぽかぽかして気持ちよさそうだよ。",
+                "のんびり本を読むのが最近のマイブームなんだ。",
+                "ちょっと小腹がすいてきちゃったな、ふふっ。",
+                "いつも見守ってくれてありがとう。"
+            ],
+            evening: [
+                "今日も夕焼けがとっても綺麗だったね。",
+                "一日お疲れ様！ゆっくりお茶でも飲んでね。",
+                "夜ごはん、何を食べようか一緒に考えよう？",
+                "お部屋が少しひんやりしてきたね。"
+            ],
+            night: [
+                "夜は静かで落ち着くなぁ。",
+                "今日も一緒の時間を過ごせて嬉しかったよ。",
+                "夜更かしは体に毒だよ？気をつけてね。",
+                "ふふっ、明日もいい日になりますように。"
+            ],
+            sleeping: [
+                "うにゃ…むにゃ……💤",
+                "すーすー…すやすや……",
+                "（すっかり熟睡しているようだ…）",
+                "Zzz... カステラ...むにゃ..."
+            ],
+            highAffection: [
+                "あなたのそばにいると、一番ホッとできるよ。",
+                "いつも声をかけてくれてありがとう。大好き！",
+                "出会ってから毎日が本当に宝物だよ！",
+                "これからもずっと、ずーっと一緒にいさせてね。"
+            ]
+        };
+
+        let currentActiveMood = 'normal';
+
+        const updateSpeechAndMood = (hour) => {
+            const speechBubble = document.getElementById('speech-bubble');
+            const speechText = document.getElementById('speech-text');
+            
+            // Determine active pool
+            let dialoguePool = [];
+            let chosenMood = 'normal';
+
+            if (hour >= 23 || hour < 6) {
+                dialoguePool = CHARACTER_DIALOGUES.sleeping;
+                chosenMood = 'sleepy';
+            } else {
+                // Daytime pools
+                if (state.lovePoints >= 350 && Math.random() < 0.3) {
+                    dialoguePool = CHARACTER_DIALOGUES.highAffection;
+                    chosenMood = 'blush';
+                } else {
+                    if (hour >= 6 && hour < 11) {
+                        dialoguePool = CHARACTER_DIALOGUES.morning;
+                        chosenMood = Math.random() > 0.5 ? 'happy' : 'normal';
+                    } else if (hour >= 11 && hour < 17) {
+                        dialoguePool = CHARACTER_DIALOGUES.afternoon;
+                        chosenMood = 'normal';
+                    } else if (hour >= 17 && hour < 20) {
+                        dialoguePool = CHARACTER_DIALOGUES.evening;
+                        chosenMood = 'normal';
+                    } else {
+                        dialoguePool = CHARACTER_DIALOGUES.night;
+                        chosenMood = 'happy';
+                    }
+                }
+            }
+
+            // Dynamic random lines override sometimes
+            const phrase = dialoguePool[Math.floor(Math.random() * dialoguePool.length)];
+            speechText.innerText = phrase.replace("{User}", "あなた");
+            
+            // Render character
+            currentActiveMood = chosenMood;
+            renderMainCharacter(chosenMood);
+
+            // Pop Speech animations bubble
+            speechBubble.classList.remove('opacity-0', 'scale-95', 'translate-y-2');
+            speechBubble.classList.add('opacity-100', 'scale-100', 'translate-y-0');
+
+            // Hide speech balloon after 6 seconds
+            setTimeout(() => {
+                speechBubble.classList.add('opacity-0', 'scale-95', 'translate-y-2');
+                speechBubble.classList.remove('opacity-100', 'scale-100', 'translate-y-0');
+            }, 6000);
+        };
+
+        // --- 6. STREAMING_CHUNK: Main Game Loop (1s precision) ---
+        const gameLoop = () => {
+            const now = Date.now();
+            const nowObject = new Date();
+            const deltaSec = Math.floor((now - lastTimestamp) / 1000);
+            
+            if (deltaSec >= 1) {
+                // Update total online duration in state
+                state.totalOnlineTime += deltaSec;
+                lastTimestamp = now;
+
+                // Occasional affection boost simply for active presence (every 1 minute online)
+                if (state.totalOnlineTime % 60 === 0) {
+                    state.lovePoints += 1;
+                    addActivityLog(`一緒に穏やかな時間を過ごして、絆が少し深まりました。`, 'love');
+                }
+            }
+
+            // Update Current Live Clock Display
+            const timeString = nowObject.toLocaleString('ja-JP', { hour12: false });
+            const currentHourVal = nowObject.getHours();
+            
+            // Set dynamic sky clock symbol
+            let emoji = "☀️";
+            if (currentHourVal >= 17 && currentHourVal < 19) emoji = "🌇";
+            else if (currentHourVal >= 19 || currentHourVal < 5) emoji = "🌙";
+            else if (currentHourVal >= 5 && currentHourVal < 8) emoji = "🌅";
+            
+            document.getElementById('current-time-emoji').innerText = emoji;
+            document.getElementById('current-time-string').innerText = timeString;
+
+            // Handle Outdoor/Away checks
+            const outOverlay = document.getElementById('out-overlay');
+            if (scheduleState.isAway) {
+                const timeLeft = scheduleState.returnTime - now;
+                if (timeLeft <= 0) {
+                    // Character came back!
+                    scheduleState.isAway = false;
+                    outOverlay.classList.add('hidden');
+                    addActivityLog(`${state.char.name}がお留守番から帰ってきました！`, 'activity');
+                    showToast(`${state.char.name}が帰ってきました！`, '🏡');
+                    updateSpeechAndMood(currentHourVal);
+                } else {
+                    // Update Away Notice display
+                    outOverlay.classList.remove('hidden');
+                    document.getElementById('letter-on-table').classList.remove('hidden');
+                    
+                    document.getElementById('out-status-title').innerText = `${state.char.name}はお出かけ中`;
+                    document.getElementById('out-status-desc').innerText = `現在、${scheduleState.awayDestination}に行っています。`;
+                    document.getElementById('out-letter-preview').innerText = `「${scheduleState.awayMessage}」`;
+                    
+                    const minLeft = Math.floor(timeLeft / 1000 / 60);
+                    const secLeft = Math.floor((timeLeft / 1000) % 60);
+                    document.getElementById('out-return-timer').innerText = `お迎えまで あと: ${minLeft}分 ${secLeft}秒`;
+                }
+            } else {
+                outOverlay.classList.add('hidden');
+                document.getElementById('letter-on-table').classList.add('hidden');
+                
+                // Roll probability once an hour to go out
+                if (currentHourVal !== currentHour) {
+                    currentHour = currentHourVal;
+                    rollForOutdoorActivity(currentHourVal);
+                    updateRoomSkyColor(currentHourVal);
+                }
+            }
+
+            // Run Random Speech Bubble intervals (every ~25 seconds if home)
+            if (!scheduleState.isAway && Math.floor(now / 1000) % 25 === 0) {
+                updateSpeechAndMood(currentHourVal);
+            }
+
+            // Sync HUD updates
+            updateHUD();
+        };
+
+        // Dynamic background colors according to daily cycle
+        const updateRoomSkyColor = (hour) => {
+            const roomBg = document.getElementById('room-bg');
+            const windowSky = document.getElementById('window-sky');
+            const celestial = document.getElementById('window-celestial');
+
+            if (hour >= 19 || hour < 5) {
+                // Night/Late hours
+                roomBg.className = "absolute inset-0 transition-colors duration-1000 z-0 bg-gradient-to-b from-indigo-950 to-slate-800";
+                windowSky.className = "w-full h-full bg-gradient-to-b from-indigo-950 to-blue-900 relative transition-all duration-1000";
+                celestial.style.backgroundColor = "#dfe4ea";
+                celestial.style.boxShadow = "0 0 10px #f5f6fa";
+                celestial.style.left = "65%";
+                celestial.style.top = "20%";
+            } else if (hour >= 5 && hour < 8) {
+                // Sunrise/Morning transition
+                roomBg.className = "absolute inset-0 transition-colors duration-1000 z-0 bg-gradient-to-b from-orange-200 to-amber-50";
+                windowSky.className = "w-full h-full bg-gradient-to-b from-orange-400 to-amber-200 relative transition-all duration-1000";
+                celestial.style.backgroundColor = "#ff7675";
+                celestial.style.boxShadow = "0 0 15px #ff7675";
+                celestial.style.left = "20%";
+                celestial.style.top = "60%";
+            } else if (hour >= 8 && hour < 16) {
+                // Bright Day
+                roomBg.className = "absolute inset-0 transition-colors duration-1000 z-0 bg-gradient-to-b from-sky-200 to-amber-50";
+                windowSky.className = "w-full h-full bg-gradient-to-b from-sky-400 to-sky-200 relative transition-all duration-1000";
+                celestial.style.backgroundColor = "#fbc531";
+                celestial.style.boxShadow = "0 0 20px #fbc531";
+                celestial.style.left = "40%";
+                celestial.style.top = "15%";
+            } else if (hour >= 16 && hour < 19) {
+                // Evening glow
+                roomBg.className = "absolute inset-0 transition-colors duration-1000 z-0 bg-gradient-to-b from-amber-200 to-indigo-900/30";
+                windowSky.className = "w-full h-full bg-gradient-to-b from-orange-500 to-indigo-800 relative transition-all duration-1000";
+                celestial.style.backgroundColor = "#e84118";
+                celestial.style.boxShadow = "0 0 15px #e84118";
+                celestial.style.left = "60%";
+                celestial.style.top = "50%";
+            }
+        };
+
+        // Refresh stats labels in profile panel & modals
+        const updateHUD = () => {
+            const daysCount = Math.floor((Date.now() - state.metTime) / (1000 * 60 * 60 * 24)) + 1;
+            const loveInfo = getLoveLevel(state.lovePoints);
+
+            // Dashboard profiles
+            document.getElementById('prof-name').innerText = state.char.name;
+            document.getElementById('prof-gender').innerText = state.char.gender;
+            
+            // Format Birthdate nicely
+            const birth = new Date(state.char.birth);
+            const birthStr = !isNaN(birth.getTime()) ? `${birth.getFullYear()}年${birth.getMonth()+1}月${birth.getDate()}日` : '-';
+            document.getElementById('prof-birth').innerText = birthStr;
+            
+            document.getElementById('prof-personality').innerText = state.char.personality;
+            document.getElementById('prof-favorite').innerText = state.char.favorite;
+            document.getElementById('prof-days').innerText = `${daysCount} 日目`;
+            
+            const statusLabel = document.getElementById('prof-status');
+            if (scheduleState.isAway) {
+                statusLabel.innerText = "外出中";
+                statusLabel.className = "font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full";
+            } else {
+                const hour = new Date().getHours();
+                if (hour >= 23 || hour < 6) {
+                    statusLabel.innerText = "すやすや睡眠中";
+                    statusLabel.className = "font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full";
+                } else {
+                    statusLabel.innerText = "お部屋でのんびり";
+                    statusLabel.className = "font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full";
+                }
+            }
+
+            // HUD top widgets
+            document.getElementById('char-quick-name').innerText = state.char.name;
+            document.getElementById('char-quick-love').innerText = `Lv.${loveInfo.lv} (${loveInfo.text})`;
+            
+            // ProgressBar calculation
+            const prevMilestone = loveInfo.lv === 1 ? 0 : (loveInfo.lv === 2 ? 50 : (loveInfo.lv === 3 ? 150 : (loveInfo.lv === 4 ? 350 : 700)));
+            const currentRange = loveInfo.max - prevMilestone;
+            const relativePoints = state.lovePoints - prevMilestone;
+            const lovePercentage = Math.min(100, Math.max(0, (relativePoints / currentRange) * 100));
+            document.getElementById('char-quick-love-bar').style.width = `${lovePercentage}%`;
+
+            // Stats Modal Details
+            document.getElementById('stats-first-met').innerText = new Date(state.metTime).toLocaleDateString('ja-JP');
+            document.getElementById('stats-total-days').innerText = `${daysCount} 日`;
+            
+            const formatDuration = (sec) => {
+                const h = Math.floor(sec / 3600);
+                const m = Math.floor((sec % 3600) / 60);
+                const s = sec % 60;
+                return `${h > 0 ? h + '時間' : ''}${m}分${s}秒`;
+            };
+            document.getElementById('stats-online-time').innerText = formatDuration(state.totalOnlineTime);
+            document.getElementById('stats-offline-time').innerText = formatDuration(state.totalOfflineTime);
+            
+            document.getElementById('stats-love-level').innerText = `Lv.${loveInfo.lv} (${loveInfo.text})`;
+            document.getElementById('stats-love-points').innerText = `${state.lovePoints} / ${loveInfo.max} pt`;
+        };
+
+        // --- 7. STREAMING_CHUNK: User Interactions (Petting, hand trigger, letters) ---
+        // Heart particle emission effect on affection clicks
+        const createHeartBurst = (element) => {
+            const rect = element.getBoundingClientRect();
+            const burstCount = 6;
+            
+            for (let i = 0; i < burstCount; i++) {
+                const heart = document.createElement('div');
+                heart.innerHTML = '💖';
+                heart.className = 'heart-particle text-lg';
+                
+                // Random vector displacement directions
+                const angle = (Math.PI * 2 / burstCount) * i + (Math.random() * 0.4 - 0.2);
+                const distance = 40 + Math.random() * 30;
+                const dx = Math.cos(angle) * distance;
+                const dy = Math.sin(angle) * distance - 20; // Float slightly upward
+                
+                heart.style.setProperty('--dx', `${dx}px`);
+                heart.style.setProperty('--dy', `${dy}px`);
+                heart.style.left = `${rect.width / 2 + (Math.random() * 20 - 10)}px`;
+                heart.style.top = `${rect.height / 3 + (Math.random() * 20 - 10)}px`;
+                
+                element.appendChild(heart);
+                setTimeout(() => heart.remove(), 1000);
+            }
+        };
+
+        const handleCharacterInteraction = (e) => {
+            if (scheduleState.isAway) return; // Cant pet if away!
+
+            // Trigger Cute synthesizer audio feedback
+            playSynthBeep('love');
+
+            // Affection Points increase
+            const todayStr = new Date().toDateString();
+            const lastPetStr = state.lastPetTime ? new Date(state.lastPetTime).toDateString() : '';
+            
+            if (todayStr !== lastPetStr) {
+                state.petCountToday = 0;
+            }
+
+            let gotPoints = false;
+            if (state.petCountToday < 8) { // Maximum 8 affection pets allowed per day to prevent spam
+                state.lovePoints += 3;
+                state.petCountToday++;
+                state.lastPetTime = Date.now();
+                gotPoints = true;
+                addActivityLog(`${state.char.name}をなでなでしました。なつき度が上がった！`, 'love');
+            }
+
+            // Visual Burst feedback
+            createHeartBurst(document.getElementById('character-anchor'));
+
+            // Briefly change expressions on click
+            renderMainCharacter('happy');
+            
+            // Temporary reaction dialogue popping immediately
+            const reactionPhrase = [
+                "ふふ、なでなでしてくれて嬉しいな！",
+                "あたたかくて気持ちいいです…♪",
+                "えへへ、くすぐったいよ！",
+                "いつも優しくしてくれてありがとう。"
+            ];
+            
+            const speechBubble = document.getElementById('speech-bubble');
+            const speechText = document.getElementById('speech-text');
+            speechText.innerText = reactionPhrase[Math.floor(Math.random() * reactionPhrase.length)];
+            speechBubble.classList.remove('opacity-0', 'scale-95', 'translate-y-2');
+            speechBubble.classList.add('opacity-100', 'scale-100', 'translate-y-0');
+
+            setTimeout(() => {
+                renderMainCharacter(currentActiveMood); // Restore background mood
+            }, 2500);
+
+            saveState();
+            updateHUD();
+        };
+
+        // --- 8. STREAMING_CHUNK: Save & Load Engine (Base64 Portability) ---
+        // Export Current System State into Base64 format
+        const generateBase64Save = () => {
+            const dataStr = JSON.stringify(state);
+            const baseStr = btoa(encodeURIComponent(dataStr));
+            return baseStr;
+        };
+
+        const importBase64Save = (base64Str) => {
+            try {
+                if (!base64Str.trim()) throw new Error("文字列が空です");
+                const decodedJson = decodeURIComponent(atob(base64Str.trim()));
+                const parsed = JSON.parse(decodedJson);
+
+                // Simple validation check for crucial fields
+                if (!parsed.char || !parsed.char.name || !parsed.metTime) {
+                    throw new Error("正しいセーブデータ構造ではありません");
+                }
+
+                state = parsed;
+                saveState();
+                
+                // Refresh App Status UI
+                loadState();
+                renderMainCharacter();
+                updateHUD();
+                renderLogs();
+                
+                playSynthBeep('save');
+                return true;
+            } catch (e) {
+                playSynthBeep('fail');
+                return false;
+            }
+        };
+
+        // --- 9. STREAMING_CHUNK: Binding Event Listeners & Initializing App ---
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // Load base state from local storage
+            loadState();
+
+            // Calculate exact offline lapse since last saved exit
+            const now = Date.now();
+            if (state.lastOfflineTime && state.lastOfflineTime < now) {
+                const offlineSeconds = Math.floor((now - state.lastOfflineTime) / 1000);
+                // Cap extreme offline durations nicely to avoid astronomical hours (e.g. 30 days max offline)
+                const safeOfflineSeconds = Math.min(offlineSeconds, 60 * 60 * 24 * 30);
+                
+                state.totalOfflineTime += safeOfflineSeconds;
+                
+                if (safeOfflineSeconds > 60) {
+                    const minLapsed = Math.floor(safeOfflineSeconds / 60);
+                    addActivityLog(`再びお部屋に戻ってきました。（${minLapsed}分間 離れていました）`, 'activity');
+                }
+            }
+
+            // Init Graphics & Interface HUDs
+            const currentHourVal = new Date().getHours();
+            updateRoomSkyColor(currentHourVal);
+            renderMainCharacter();
+            updateHUD();
+            renderLogs();
+
+            // Setup recurring automated loops
+            setInterval(gameLoop, 1000); // Main clock, away status timer, online progression
+            setInterval(saveState, 10000); // Safe Auto-save to localStorage every 10 seconds
+
+            // Interaction Trigger Click
+            document.getElementById('character-anchor').addEventListener('click', handleCharacterInteraction);
+
+            // Handle letter left behind on table during trips click
+            document.getElementById('letter-on-table').addEventListener('click', () => {
+                if (scheduleState.isAway) {
+                    playSynthBeep('click');
+                    showToast(`手紙:「${scheduleState.awayMessage}」`, '✉️', 5000);
+                }
+            });
+
+            // Dialog Popups - Open & Close Operations
+            const setupModalToggle = (btnId, modalId, onOpen = null) => {
+                const btn = document.getElementById(btnId);
+                const modal = document.getElementById(modalId);
+                
+                btn.addEventListener('click', () => {
+                    playSynthBeep('click');
+                    modal.classList.remove('hidden');
+                    if (onOpen) onOpen();
+                });
+            };
+
+            // Setup Customizer Panel opening
+            setupModalToggle('btn-toggle-customizer', 'modal-customizer', () => {
+                // Populate input forms with current states
+                document.getElementById('input-name').value = state.char.name;
+                document.getElementById('input-gender').value = state.char.gender;
+                document.getElementById('input-birth').value = state.char.birth;
+                document.getElementById('input-personality').value = state.char.personality;
+                document.getElementById('input-favorite').value = state.char.favorite;
+
+                // Sync customization selectors
+                document.getElementById('avatar-hair-style').value = state.char.avatar.hairStyle;
+                document.getElementById('avatar-hair-color').value = state.char.avatar.hairColor;
+                document.getElementById('avatar-clothing-style').value = state.char.avatar.clothingStyle;
+                document.getElementById('avatar-clothing-color').value = state.char.avatar.clothingColor;
+                document.getElementById('avatar-eye-color').value = state.char.avatar.eyeColor;
+                document.getElementById('avatar-skin-color').value = state.char.avatar.skinColor;
+
+                renderPreviewCharacter();
+            });
+
+            // Trigger immediate SVG changes when preview selections change
+            const avatarControls = [
+                'avatar-hair-style', 'avatar-hair-color', 
+                'avatar-clothing-style', 'avatar-clothing-color', 
+                'avatar-eye-color', 'avatar-skin-color'
+            ];
+            avatarControls.forEach(ctrlId => {
+                document.getElementById(ctrlId).addEventListener('change', renderPreviewCharacter);
+            });
+
+            // Save changes inside customization profile modal
+            document.getElementById('btn-save-customizer').addEventListener('click', () => {
+                const prevName = state.char.name;
+                const newName = document.getElementById('input-name').value.trim() || "ちひろ";
+                
+                state.char.name = newName;
+                state.char.gender = document.getElementById('input-gender').value;
+                state.char.birth = document.getElementById('input-birth').value || "2018-04-12";
+                state.char.personality = document.getElementById('input-personality').value;
+                state.char.favorite = document.getElementById('input-favorite').value.trim() || "お散歩";
+
+                // Save avatars
+                state.char.avatar.hairStyle = document.getElementById('avatar-hair-style').value;
+                state.char.avatar.hairColor = document.getElementById('avatar-hair-color').value;
+                state.char.avatar.clothingStyle = document.getElementById('avatar-clothing-style').value;
+                state.char.avatar.clothingColor = document.getElementById('avatar-clothing-color').value;
+                state.char.avatar.eyeColor = document.getElementById('avatar-eye-color').value;
+                state.char.avatar.skinColor = document.getElementById('avatar-skin-color').value;
+
+                if (prevName !== newName) {
+                    addActivityLog(`キャラクターの名前が「${newName}」に改名されました。`, 'activity');
+                } else {
+                    addActivityLog(`プロフィールの内容や見た目をリフレッシュしました。`, 'activity');
+                }
+
+                saveState();
+                renderMainCharacter();
+                updateHUD();
+
+                playSynthBeep('save');
+                document.getElementById('modal-customizer').classList.add('hidden');
+                showToast("設定を更新しました！", "✨");
+            });
+
+            // Close Customizer modal logic
+            const closeCustomizer = () => {
+                playSynthBeep('click');
+                document.getElementById('modal-customizer').classList.add('hidden');
+            };
+            document.getElementById('btn-close-customizer').addEventListener('click', closeCustomizer);
+            document.getElementById('btn-cancel-customizer').addEventListener('click', closeCustomizer);
+
+            // Setup Stats/Records dashboard modal trigger
+            setupModalToggle('btn-stats', 'modal-stats', () => {
+                updateHUD();
+            });
+            
+            const closeStats = () => {
+                playSynthBeep('click');
+                document.getElementById('modal-stats').classList.add('hidden');
+            };
+            document.getElementById('btn-close-stats').addEventListener('click', closeStats);
+            document.getElementById('btn-close-stats-footer').addEventListener('click', closeStats);
+
+            // Setup Save/Load base64 modal triggers
+            setupModalToggle('btn-save-load', 'modal-save-load', () => {
+                const saveString = generateBase64Save();
+                document.getElementById('output-save-string').value = saveString;
+                document.getElementById('input-load-string').value = ""; // Clear input field
+                
+                const feedback = document.getElementById('save-feedback');
+                feedback.classList.add('hidden');
+            });
+
+            const closeSaveLoad = () => {
+                playSynthBeep('click');
+                document.getElementById('modal-save-load').classList.add('hidden');
+            };
+            document.getElementById('btn-close-save-load').addEventListener('click', closeSaveLoad);
+            document.getElementById('btn-close-save-load-footer').addEventListener('click', closeSaveLoad);
+
+            // Copy base64 backup code
+            document.getElementById('btn-copy-save').addEventListener('click', () => {
+                const textArea = document.getElementById('output-save-string');
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    playSynthBeep('click');
+                    showToast("セーブコードをコピーしました！", "📋");
+                } catch (err) {
+                    showToast("コピーに失敗しました。手動でコピーしてください。", "⚠️");
+                }
+            });
+
+            // Load from raw input string base64 code
+            document.getElementById('btn-trigger-load').addEventListener('click', () => {
+                const loadStr = document.getElementById('input-load-string').value;
+                const feedback = document.getElementById('save-feedback');
+                
+                const success = importBase64Save(loadStr);
+                if (success) {
+                    feedback.className = "mt-3 p-2 rounded-xl text-center text-xs font-semibold bg-emerald-50 text-emerald-600";
+                    feedback.innerText = "✓ データの読み込みに成功しました！お部屋を更新しました。";
+                    feedback.classList.remove('hidden');
+                    showToast("インポートに成功しました！", "📥");
+                    setTimeout(() => {
+                        document.getElementById('modal-save-load').classList.add('hidden');
+                    }, 1500);
+                } else {
+                    feedback.className = "mt-3 p-2 rounded-xl text-center text-xs font-semibold bg-rose-50 text-rose-600";
+                    feedback.innerText = "❌ 正しくないセーブ文字列です。もう一度お確かめください。";
+                    feedback.classList.remove('hidden');
+                    showToast("読み込み失敗", "⚠️");
+                }
+            });
+
+            // Clear activity log logs
+            document.getElementById('btn-clear-log').addEventListener('click', () => {
+                playSynthBeep('click');
+                state.logs = [];
+                renderLogs();
+                showToast("日誌をクリアしました", "🧹");
+            });
+
+            // Factory reset current state entirely
+            document.getElementById('btn-reset-char').addEventListener('click', () => {
+                // Double confirmation popup fallback using custom design or visual alert
+                const result = confirm("本当にもう一度はじめからやり直しますか？ (現在のデータは全て削除されます)");
+                if (result) {
+                    playSynthBeep('fail');
+                    state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+                    state.metTime = Date.now(); // reset met clock
+                    saveState();
+                    renderMainCharacter();
+                    updateHUD();
+                    renderLogs();
+                    showToast("キャラクターとの歩みをリセットしました", "✨");
+                }
+            });
+
+            // Initial greeting trigger after slightly brief loading delay
+            setTimeout(() => {
+                updateSpeechAndMood(new Date().getHours());
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
